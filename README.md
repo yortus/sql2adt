@@ -1,2 +1,2 @@
 # sql2adt
-Run SQL Queries against ADT Files in Node.js
+Run SQL queries against ADT files in Node.js

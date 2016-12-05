@@ -1,0 +1,44 @@
+{
+  "name": "sql2adt",
+  "version": "0.0.1",
+  "description": "Run SQL queries against ADT files in Node.js",
+  "readmeFilename": "README.md",
+  "main": "built/index.js",
+  "typings": "built/index.d.ts",
+  "scripts": {
+    "build": "tsc -p src && tsc -p test && pegjs src/grammar.peg built/grammar.js",
+    "clean": "rimraf built/",
+    "prepublish": "npm run self-ref && npm run build",
+    "test": "node ./scripts/run-unit-tests",
+    "self-ref": "node ./scripts/enable-self-reference"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/paypac/sql2adt.git"
+  },
+  "bugs": {
+    "url": "http://github.com/paypac/sql2adt/issues"
+  },
+  "keywords": [
+  ],
+  "contributors": [
+    {
+      "name": "Troy Gerwien",
+      "email": "yortus@gmail.com",
+      "url": "http://github.com/yortus/"
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/paypac/sql2adt#readme",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/chai": "^3.4.31",
+    "@types/mocha": "^2.2.30",
+    "@types/node": "^6.0.37",
+    "chai": "^3.2.0",
+    "mocha": "^2.2.5",
+    "pegjs": "^0.9.0",
+    "rimraf": "^2.5.2",
+    "typescript": "^2.2.0-dev.20161205"
+  }
+}

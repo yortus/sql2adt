@@ -1,0 +1,12 @@
+.vscode/
+built/test/
+scripts/
+src/
+test/
+typings/
+*.ts
+!*.d.ts
+*.js.map
+*.peg
+*.log
+tsconfig.json
