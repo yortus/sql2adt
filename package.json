@@ -6,7 +6,7 @@
   "main": "built/index.js",
   "typings": "built/index.d.ts",
   "scripts": {
-    "build": "tsc -p src && tsc -p test && pegjs src/grammar.peg built/grammar.js",
+    "build": "tsc -p src && tsc -p test && pegjs src/parse/sql-grammar.peg built/parse/sql-grammar.js && ncp test/fixtures built/test/fixtures",
     "clean": "rimraf built/",
     "prepublish": "npm run self-ref && npm run build",
     "test": "node ./scripts/run-unit-tests",
@@ -19,8 +19,7 @@
   "bugs": {
     "url": "http://github.com/paypac/sql2adt/issues"
   },
-  "keywords": [
-  ],
+  "keywords": [],
   "contributors": [
     {
       "name": "Troy Gerwien",
@@ -30,13 +29,16 @@
   ],
   "license": "MIT",
   "homepage": "https://github.com/paypac/sql2adt#readme",
-  "dependencies": {},
+  "dependencies": {
+    "node_adt": "^1.1.2"
+  },
   "devDependencies": {
     "@types/chai": "^3.4.31",
     "@types/mocha": "^2.2.30",
     "@types/node": "^6.0.37",
     "chai": "^3.2.0",
     "mocha": "^2.2.5",
+    "ncp": "^2.0.0",
     "pegjs": "^0.9.0",
     "rimraf": "^2.5.2",
     "typescript": "^2.2.0-dev.20161205"
