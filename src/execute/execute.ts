@@ -14,7 +14,5 @@ export default async function execute(databasePath: string, sql: string) {
     let tablePath = path.join(databasePath, tableName + '.adt');
 
     let rows = await fetchRecords(tablePath);
-
-    console.log(rows);
-    console.log('DONE!');
+    return rows;
 }
