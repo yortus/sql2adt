@@ -41,7 +41,7 @@ FromClause
     }
 
 Table
-=   name:ID   alias:(WS   "AS"i?   WS   ID)?
+=   name:ID   alias:(WS   !"WHERE"i   "AS"i?   WS   ID)?
     { return {name, alias: alias && alias[3]}; }
 
 JoinClause
@@ -72,5 +72,5 @@ StringLiteral
 =   "'"   (!['\r\n]   .)*   "'"
     { return text().slice(1, -1); }
 
-ID = [a-z]i+   { return text(); }
+ID = [a-z_]i [a-z0-9_]i*   { return text(); }
 WS = [ \t\r\n]*
