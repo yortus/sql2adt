@@ -53,7 +53,7 @@ describe('Parsing an unsupported SQL statement', () => {
 
     tests.forEach(test => {
         it(test, () => {
-            expect(() => parseSQL(test)).to.throw;
+            expect(() => parseSQL(test)).to.throw();
         });
     });
 });

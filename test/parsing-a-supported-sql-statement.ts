@@ -19,7 +19,7 @@ describe('Parsing a supported SQL statement', () => {
 
     tests.forEach(test => {
         it(test, () => {
-            expect(() => parseSQL(test)).not.to.throw;
+            expect(() => parseSQL(test)).not.to.throw();
         });
     });
 });
