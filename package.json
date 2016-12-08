@@ -1,6 +1,6 @@
 {
   "name": "sql2adt",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Run SQL queries against ADT files in Node.js",
   "readmeFilename": "README.md",
   "main": "built/index.js",
