@@ -35,10 +35,10 @@ export interface AST {
 }
 export type Restriction = Join | EqValue | GtValue | LtValue | NeValue | GeValue | LeValue
 export type Join = { type: 'join', column: string; column2: string; }
-export type EqValue = { type: 'eq-value', column: string; value: string; }
-export type GtValue = { type: 'gt-value', column: string; value: string; }
-export type LtValue = { type: 'lt-value', column: string; value: string; }
-export type NeValue = { type: 'ne-value', column: string; value: string; }
-export type GeValue = { type: 'ge-value', column: string; value: string; }
-export type LeValue = { type: 'le-value', column: string; value: string; }
+export type EqValue = { type: 'eq-value', column: string; value: string|number; }
+export type GtValue = { type: 'gt-value', column: string; value: string|number; }
+export type LtValue = { type: 'lt-value', column: string; value: string|number; }
+export type NeValue = { type: 'ne-value', column: string; value: string|number; }
+export type GeValue = { type: 'ge-value', column: string; value: string|number; }
+export type LeValue = { type: 'le-value', column: string; value: string|number; }
 export type Projection = { column: string; alias: string; }

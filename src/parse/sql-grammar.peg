@@ -1,5 +1,5 @@
 SelectStatement
-=   select:SelectClause   WS   from:FromClause   where:(WS   WhereClause)?   WS   !.
+=   WS   select:SelectClause   WS   from:FromClause   where:(WS   WhereClause)?   WS   !.
     {
         let tables = from.tables.map(el => el.name);
         let tableAliases = from.tables.reduce((map, t) => (map[t.alias] = t.name, map), {});
@@ -42,7 +42,7 @@ FromClause
 
 Table
 =   name:ID   alias:(WS   !"WHERE"i   "AS"i?   WS   ID)?
-    { return {name, alias: alias && alias[3]}; }
+    { return {name, alias: alias && alias[4]}; }
 
 JoinClause
 =   WS   "INNER JOIN"i   WS   table:Table   WS   "ON"i   WS    on:JoinRestriction
@@ -57,20 +57,27 @@ WhereClause
     { return [first].concat(rest.map(el => el[3])); }
 
 LogicalExpr
-=   column:QualifiedColumnReference   WS   op:"="   WS   value:StringLiteral   { return {type: 'eq-value', column, value}; }
-/   column:QualifiedColumnReference   WS   op:">"   WS   value:StringLiteral   { return {type: 'gt-value', column, value}; }
-/   column:QualifiedColumnReference   WS   op:"<"   WS   value:StringLiteral   { return {type: 'lt-value', column, value}; }
-/   column:QualifiedColumnReference   WS   op:"<>"   WS   value:StringLiteral   { return {type: 'ne-value', column, value}; }
-/   column:QualifiedColumnReference   WS   op:"!="   WS   value:StringLiteral   { return {type: 'ne-value', column, value}; }
-/   column:QualifiedColumnReference   WS   op:">="   WS   value:StringLiteral   { return {type: 'ge-value', column, value}; }
-/   column:QualifiedColumnReference   WS   op:"<="   WS   value:StringLiteral   { return {type: 'le-value', column, value}; }
+=   column:QualifiedColumnReference   WS   op:"="   WS   value:Literal   { return {type: 'eq-value', column, value}; }
+/   column:QualifiedColumnReference   WS   op:">"   WS   value:Literal   { return {type: 'gt-value', column, value}; }
+/   column:QualifiedColumnReference   WS   op:"<"   WS   value:Literal   { return {type: 'lt-value', column, value}; }
+/   column:QualifiedColumnReference   WS   op:"<>"   WS   value:Literal   { return {type: 'ne-value', column, value}; }
+/   column:QualifiedColumnReference   WS   op:"!="   WS   value:Literal   { return {type: 'ne-value', column, value}; }
+/   column:QualifiedColumnReference   WS   op:">="   WS   value:Literal   { return {type: 'ge-value', column, value}; }
+/   column:QualifiedColumnReference   WS   op:"<="   WS   value:Literal   { return {type: 'le-value', column, value}; }
 
 QualifiedColumnReference
 =   tableName:ID   "."   columnName:ID   { return text(); }
 
+Literal
+=   StringLiteral
+/   NumericLiteral
+
 StringLiteral
 =   "'"   (!['\r\n]   .)*   "'"
     { return text().slice(1, -1); }
+
+NumericLiteral
+=   [0-9]+   { return parseInt(text()); }
 
 ID = [a-z_]i [a-z0-9_]i*   { return text(); }
 WS = [ \t\r\n]*

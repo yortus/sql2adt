@@ -1,13 +1,16 @@
+import * as path from 'path';
 import Adt = require('node_adt');
 
 
 
 
 
-export default function fetchRecords(path: string, filter: (row: any) => boolean = () => true): Promise<any[]> {
+export default function fetchRecords(databasePath: string, tableName: string, filter: (row: any) => boolean = () => true): Promise<any[]> {
+    let tablePath = path.join(databasePath, tableName + '.adt');
+
     return new Promise((resolve, reject) => {
         let adt = new Adt();
-        adt.open(path, 'ISO-8859-1', (err, table) => {
+        adt.open(tablePath, 'ISO-8859-1', (err, table) => {
             if (err) return reject(err);
 
             let rows: any[] = [];
@@ -18,7 +21,8 @@ export default function fetchRecords(path: string, filter: (row: any) => boolean
                 (err, row) => {
                     if (rowError) return;
                     if (err) return reject(rowError = err);
-                    if (filter(row)) rows.push(row);
+                    let tuple = {[tableName]: row};
+                    if (filter(tuple)) rows.push(tuple);
                 },
                 err => {
                     if (rowError) return;

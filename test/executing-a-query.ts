@@ -12,11 +12,20 @@ describe('Executing a query', () => {
 
     let tests: Array<string | Array<(rows: any[]) => void>>;
     tests = [
-        `SELECT a.NAME as NAME FROM animals a`, [
-            rows => expect(rows.length).to.equal(7),
-            rows => expect(rows.some(row => row.NAME === 'Angel Fish')).is.true,
-            rows => expect(Object.keys(rows[0]).sort()).deep.equal(['AREA', 'BMP', 'NAME', 'SIZE', 'WEIGHT']),
-        ],
+        // `SELECT a.NAME as NAME FROM animals a`, [
+        //     rows => expect(rows.length).to.equal(7),
+        //     rows => expect(rows.some(row => row.NAME === 'Angel Fish')).is.true,
+        //     rows => expect(Object.keys(rows[0]).sort()).deep.equal(['AREA', 'BMP', 'NAME', 'SIZE', 'WEIGHT']),
+        // ],
+        `
+            SELECT o.OrderNo as OrderNo, o.ItemsTotal as total, i.Qty as Qty, p.Description as desc
+            FROM orders o
+                INNER JOIN items i ON o.OrderNo = i.OrderNo
+                INNER JOIN parts p ON p.PartNo = i.PartNo
+            WHERE p.PartNo = 1313
+        `, [
+            () => expect(1).to.equal(1)
+        ]
     ];
 
     for (let i = 0; i < tests.length; i += 2) {
