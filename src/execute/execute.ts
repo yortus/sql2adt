@@ -38,8 +38,8 @@ export default async function execute(databasePath: string, sql: string): Promis
         let rhsTable = join.column2.slice(0, join.column2.indexOf('.'));
         let lhsField = join.column.slice(lhsTable.length + 1);
         let rhsField = join.column2.slice(rhsTable.length + 1);
-        let lhsRowset = rowsets.filter(rowset => Object.keys(rowset[0]).indexOf(lhsTable) !== -1)[0];
-        let rhsRowset = rowsets.filter(rowset => Object.keys(rowset[0]).indexOf(rhsTable) !== -1)[0];
+        let lhsRowset = rowsets.find(rowset => Object.keys(rowset[0]).indexOf(lhsTable) !== -1)!;
+        let rhsRowset = rowsets.find(rowset => Object.keys(rowset[0]).indexOf(rhsTable) !== -1)!;
 
         // TODO: make a lookup map for the RHS table, keyed by the join value
         let getRhsValue: Function = eval(`(tuple => tuple.${rhsTable}.${rhsField})`);
