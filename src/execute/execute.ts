@@ -11,23 +11,22 @@ export default async function execute(databasePath: string, sql: string): Promis
     let ast = parseSQL(sql);
     let tableNames = ast.tables;
     let joins = ast.restrictions.filter(r => r.type === 'join') as Join[];
-    let where = ast.restrictions.filter(r => r.type !== 'join') as (EqValue|NeValue|GtValue|GeValue|LtValue|LeValue)[];
+    let predicates = ast.restrictions.filter(r => r.type !== 'join') as (EqValue|NeValue|GtValue|GeValue|LtValue|LeValue)[];
     let projs = ast.projections;
+    let usedRestrictions = 0;
 
     // TODO: build a filter function for each table
-    let whereTables = where.map(w => w.column.slice(0, w.column.indexOf('.')));
     let filters = tableNames.map(tableName => {
-        let conds = where.filter((_, i) => whereTables[i] === tableName);
-        let condSources = conds.map(cond => `tuple.${cond.column} ${jsBinaryOperator(cond)} ${JSON.stringify(cond.value)}`);
-        if (condSources.length === 0) condSources = ['true'];
-        let filter = eval(`(tuple => (${condSources.join(') && (')}))`);
+        let localPredicates = predicates.filter((_, i) => predicates[i].column.slice(0, predicates[i].column.indexOf('.')) === tableName);
+        usedRestrictions += localPredicates.length;
+        let predicateSources = localPredicates.map(cond => `tuple.${cond.column} ${jsBinaryOperator(cond)} ${JSON.stringify(cond.value)}`);
+        if (predicateSources.length === 0) predicateSources = ['true'];
+        let filter = eval(`(tuple => (${predicateSources.join(') && (')}))`);
         return filter;
     });
 
     // TODO: fetch all rowsets with table-level filtering...
     let rowsets = await Promise.all(tableNames.map((tableName, i) => fetchRecords(databasePath, tableName, filters[i])));
-
-
 
     // TODO: consume each join until there is a single rowset left
     // TODO: Also if any rowset is empty then the final result is also empty
@@ -35,6 +34,7 @@ export default async function execute(databasePath: string, sql: string): Promis
 
         // TODO: ...
         let join = joins.pop()!;
+        ++usedRestrictions;
         let lhsTable = join.column.slice(0, join.column.indexOf('.'));
         let rhsTable = join.column2.slice(0, join.column2.indexOf('.'));
         let lhsRowset = rowsets.find(rowset => Object.keys(rowset[0]).indexOf(lhsTable) !== -1)!;
@@ -54,32 +54,22 @@ export default async function execute(databasePath: string, sql: string): Promis
         // TODO: Update rowsets...
         rowsets = rowsets.filter(rowset => rowset !== lhsRowset && rowset !== rhsRowset).concat([joinedRowset]);
     }
+
+    // TODO: ...
     let result = rowsets.length === 1 ? rowsets[0] : [];
+    usedRestrictions += joins.length;
 
     // TODO: perform the projections
     let project: Function = eval(`(tuple => ({${projs.map(p => `${p.alias}: tuple.${p.column}`)}}))`);
     result = result.map(tuple => project(tuple));
 
+    // TODO: sanity check - were all restrictions consumed to produce the final result?
+    if (usedRestrictions !== ast.restrictions.length) {
+        throw new Error(`Internal error`);
+    }
+
+    // All done.
     return result;
-
-
-
-
-
-
-
-
-
-
-
-    // [x] 1. construct per-table simple constant filter functions
-    // [x] 2. fetch rows for all tables
-    // [x] 3. perform inner joins to create tuples
-    // [x]    3.1 for each join, make an 'index' for the smaller rowset (use ES6 Map)
-    // [x]    3.2 for each row in the larger rowset, either make a tuple or discard the row
-    // [ ] 4. ensure ALL restrictions have been used (sanity check)
-    // [x] 5. perform projection
-
 }
 
 

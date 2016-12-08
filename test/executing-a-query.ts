@@ -12,11 +12,13 @@ describe('Executing a query', () => {
 
     let tests: Array<string | Array<(rows: any[]) => void>>;
     tests = [
-        // `SELECT a.NAME as NAME FROM animals a`, [
-        //     rows => expect(rows.length).to.equal(7),
-        //     rows => expect(rows.some(row => row.NAME === 'Angel Fish')).is.true,
-        //     rows => expect(Object.keys(rows[0]).sort()).deep.equal(['AREA', 'BMP', 'NAME', 'SIZE', 'WEIGHT']),
-        // ],
+        `SELECT a.NAME as NAME FROM animals a`, [
+            rows => expect(rows.length).to.equal(7),
+            rows => expect(rows.some(row => row.NAME === 'Angel Fish')).is.true,
+            rows => expect(Object.keys(rows[0]).sort()).deep.equal(['NAME']),
+            rows => expect(rows).includes({NAME: 'Angel Fish'}),
+            rows => expect(rows).includes({NAME: 'Ocelot'}),
+        ],
         `
             SELECT o.OrderNo as OrderNo, o.ItemsTotal as total, i.Qty as Qty, p.Description as desc
             FROM orders o
@@ -24,7 +26,9 @@ describe('Executing a query', () => {
                 INNER JOIN parts p ON p.PartNo = i.PartNo
             WHERE p.PartNo = 1313
         `, [
-            () => expect(1).to.equal(1)
+            rows => expect(rows.length).to.equal(16),
+            rows => expect(Object.keys(rows[0])).deep.equal(['OrderNo', 'total', 'Qty', 'desc']),
+            rows => expect(rows.every(row => row.desc === 'Regulator System')).equals(true, `all descs are 'Regulator System'`),
         ]
     ];
 
