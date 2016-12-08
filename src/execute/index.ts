@@ -1,2 +1,1 @@
-import execute from './execute';
-export default execute;
+export {default} from './execute';

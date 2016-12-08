@@ -101,43 +101,6 @@ export default async function execute(databasePath: string, sql: string): Promis
 
 
 
-// // TODO: ...
-// function extractJoinFor(mainTables: string[], sideTable: string, joins: Join[]) {
-
-//     let joinTables = joins.map(join => {
-//         return {
-//             a: join.column.slice(0, join.column.indexOf('.')),
-//             b: join.column2.slice(0, join.column2.indexOf('.'))
-//         };
-//     });
-
-//     for (let i = 0; i < joinTables.length; ++i) {
-//         let joinTable = joinTables[i];
-
-
-//         if (mainTables.indexOf(joinTable.a) !== -1 && sideTable === joinTable.b) {
-//             let result = joins[i];
-//             joins.splice(i, 1);
-//             return result;
-//         }
-//         else if (mainTables.indexOf(joinTable.b) !== -1 && sideTable === joinTable.a) {
-//             let result = {type: 'join', column: joins[i].column2, column2: joins[i].column} as Join;
-//             joins.splice(i, 1);
-//             return result;
-//         }
-//     }
-
-//     // TODO: if we get here something is very wrong (nothing joins side table to main tables)
-
-//     // BUG: see next comment
-
-//     // TODO: but this *can* happen when the rowsets become sorted such that eg the first two rowsets don't have a direct join, since the sorting is by rowset length, regardless of what joins what
-//     // how to fix?
-//     // - different sort order which guarantees the rest works fine?
-//     // - different algorithm?
-
-//     throw new Error(`Internal error`);
-// }
 
 
 
