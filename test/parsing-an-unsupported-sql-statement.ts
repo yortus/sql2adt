@@ -29,8 +29,8 @@ describe('Parsing an unsupported SQL statement', () => {
         `SELECT table.colname AS [alias] FROM table`,
         `SELECT table.colname AS alias FROM [table]`,
 
-        // Only string literals are supported in WHERE comparisons
-        `SELECT tbl.colname AS alias FROM table WHERE table.val > 42`,
+        // Only string/integer literals are supported in WHERE comparisons
+        `SELECT tbl.colname AS alias FROM table WHERE table.val > 3.14`,
 
         // Only INNER JOINs are supported
         `SELECT t1.c1 AS c1, t2.c2 AS c2 FROM t1, t2`,

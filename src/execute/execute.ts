@@ -30,44 +30,29 @@ export default async function execute(databasePath: string, sql: string): Promis
 
 
     // TODO: consume each join until there is a single rowset left
-    // Also if any rowset is empty then the final result is also empty
+    // TODO: Also if any rowset is empty then the final result is also empty
     while (rowsets.every(rowset => rowset.length > 0) && joins.length > 0) {
-        let join = joins.pop()!;
 
+        // TODO: ...
+        let join = joins.pop()!;
         let lhsTable = join.column.slice(0, join.column.indexOf('.'));
         let rhsTable = join.column2.slice(0, join.column2.indexOf('.'));
-        let lhsField = join.column.slice(lhsTable.length + 1);
-        let rhsField = join.column2.slice(rhsTable.length + 1);
         let lhsRowset = rowsets.find(rowset => Object.keys(rowset[0]).indexOf(lhsTable) !== -1)!;
         let rhsRowset = rowsets.find(rowset => Object.keys(rowset[0]).indexOf(rhsTable) !== -1)!;
 
-        // TODO: make a lookup map for the RHS table, keyed by the join value
-        let getRhsValue: Function = eval(`(tuple => tuple.${rhsTable}.${rhsField})`);
-        let rhsTableLookup = rhsRowset.reduce(
-            (map: Map<any, any>, tuple) => {
-                let rhsValue = getRhsValue(tuple);
-                if (map.has(rhsValue)) {
-                    // TODO: would be better to assume *one* of wither the LHS or RHS colref is a unique key. Try one then try the other. Will need to factor some code into a function...
-                    throw new Error(`${rhsTable}.${rhsField} is not a unique key. In every join clause 'A JOIN B on A.C = B.D, SQL2ADT requires that B.D references a unique key`);
-                }
-                map.set(rhsValue, tuple[rhsTable]);
-                return map;
-            },
-            new Map()
-        );
+        // TODO: ...
+        let joinedRowset: any[];
+        try {
+            // Try the join as-is. This will fail if the RHS column in the join does not reference a unique key.
+            joinedRowset = joinRowsets(join, lhsRowset, rhsRowset);
+        }
+        catch (err) {
+            // Try the equivalent join with reversed LHS and RHS column references. If that fails too, then we fail.
+            joinedRowset = joinRowsets({type: 'join', column: join.column2, column2: join.column}, rhsRowset, lhsRowset);
+        }
 
-        // Iterate over the LHS table's rows, adding in the matching RHS table rows or nullifying the whole thing if no match
-        let getLhsValue: Function = eval(`(tuple => tuple.${lhsTable}.${lhsField})`);
-        let newRowset = lhsRowset.map(tuple => {
-            let lhsValue = getLhsValue(tuple);
-            let matchingRhsTuple = rhsTableLookup.get(lhsValue);
-            if (!matchingRhsTuple) return null;
-            tuple[rhsTable] = matchingRhsTuple; // NB: modified in place
-            return tuple;
-        }).filter(tuple => tuple !== null);
-        
-        // The side rowset has now been subsumed into the main rowset, and can be discarded
-        rowsets = rowsets.filter(rowset => rowset !== lhsRowset && rowset !== rhsRowset).concat([newRowset]);
+        // TODO: Update rowsets...
+        rowsets = rowsets.filter(rowset => rowset !== lhsRowset && rowset !== rhsRowset).concat([joinedRowset]);
     }
     let result = rowsets.length === 1 ? rowsets[0] : [];
 
@@ -89,7 +74,7 @@ export default async function execute(databasePath: string, sql: string): Promis
 
     // [x] 1. construct per-table simple constant filter functions
     // [x] 2. fetch rows for all tables
-    // [ ] 3. perform inner joins to create tuples
+    // [x] 3. perform inner joins to create tuples
     // [x]    3.1 for each join, make an 'index' for the smaller rowset (use ES6 Map)
     // [x]    3.2 for each row in the larger rowset, either make a tuple or discard the row
     // [ ] 4. ensure ALL restrictions have been used (sanity check)
@@ -101,6 +86,41 @@ export default async function execute(databasePath: string, sql: string): Promis
 
 
 
+// TODO: ...
+function joinRowsets(join: Join, lhsRowset: any[], rhsRowset: any[]): any[] {
+
+    let lhsTable = join.column.slice(0, join.column.indexOf('.'));
+    let rhsTable = join.column2.slice(0, join.column2.indexOf('.'));
+    let lhsField = join.column.slice(lhsTable.length + 1);
+    let rhsField = join.column2.slice(rhsTable.length + 1);
+
+    // TODO: make a lookup map for the RHS table, keyed by the join value
+    let getRhsValue: Function = eval(`(tuple => tuple.${rhsTable}.${rhsField})`);
+    let rhsTableLookup = rhsRowset.reduce(
+        (map: Map<any, any>, tuple) => {
+            let rhsValue = getRhsValue(tuple);
+            if (map.has(rhsValue)) {
+                throw new Error(`${rhsTable}.${rhsField} is not a unique key. In every join clause 'A JOIN B on A.C = B.D, SQL2ADT requires that either A.C or B.D references a unique key`);
+            }
+            map.set(rhsValue, tuple);
+            return map;
+        },
+        new Map()
+    );
+
+    // Iterate over the LHS table's rows, adding in the matching RHS table rows or nullifying the whole thing if no match
+    let getLhsValue: Function = eval(`(tuple => tuple.${lhsTable}.${lhsField})`);
+    let joinedRowset = lhsRowset.map(tuple => {
+        let lhsValue = getLhsValue(tuple);
+        let matchingRhsTuple = rhsTableLookup.get(lhsValue);
+        if (!matchingRhsTuple) return null;
+        Object.keys(matchingRhsTuple).forEach(key => tuple[key] = matchingRhsTuple[key]); // NB: modified in place
+        return tuple;
+    }).filter(tuple => tuple !== null);
+
+    // All done.
+    return joinedRowset;
+}
 
 
 
