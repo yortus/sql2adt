@@ -20,8 +20,8 @@ describe('Executing a query', () => {
         `
             SELECT o.OrderNo as OrderNo, o.ItemsTotal as total, i.Qty as Qty, p.Description as desc
             FROM orders o
-                INNER JOIN items i ON o.OrderNo = i.OrderNo
-                INNER JOIN parts p ON p.PartNo = i.PartNo
+                INNER JOIN items i ON i.OrderNo = o.OrderNo
+                INNER JOIN parts p ON i.PartNo = p.PartNo
             WHERE p.PartNo = 1313
         `, [
             () => expect(1).to.equal(1)

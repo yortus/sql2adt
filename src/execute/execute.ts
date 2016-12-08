@@ -24,53 +24,64 @@ export default async function execute(databasePath: string, sql: string): Promis
         return filter;
     });
 
-    // TODO: ...
+    // TODO: fetch all rowsets with table-level filtering...
     let rowsets = await Promise.all(tableNames.map((tableName, i) => fetchRecords(databasePath, tableName, filters[i])));
 
-    // TODO: ...
-    rowsets.sort((a, b) => a.length > b.length ? 1 : a.length < b.length ? -1 : 0);
-    let main = rowsets.pop() as any[];
 
-    // TODO: ...
-    rowsets.forEach(side => {
 
-        // If there are no main or side rows, the result will always be empty
-        if (main.length === 0 || side.length === 0) {
-            main = [];
-            return;
-        }
+    // TODO: consume each join until there is a single rowset left
+    // Also if any rowset is empty then the final result is also empty
+    while (rowsets.every(rowset => rowset.length > 0) && joins.length > 0) {
+        let join = joins.pop()!;
 
-        // Find a 'join' restriction that relates any of the main tables to the side table
-        let mainTables = Object.keys(main[0]);
-        let sideTable = Object.keys(side[0])[0];
-        let join = extractJoinFor(mainTables, sideTable, joins);
+        let lhsTable = join.column.slice(0, join.column.indexOf('.'));
+        let rhsTable = join.column2.slice(0, join.column2.indexOf('.'));
+        let lhsField = join.column.slice(lhsTable.length + 1);
+        let rhsField = join.column2.slice(rhsTable.length + 1);
+        let lhsRowset = rowsets.filter(rowset => Object.keys(rowset[0]).indexOf(lhsTable) !== -1)[0];
+        let rhsRowset = rowsets.filter(rowset => Object.keys(rowset[0]).indexOf(rhsTable) !== -1)[0];
 
-        // TODO: make a lookup map for the side table, keyed by the join value
-        let getValue: Function = eval(`(row => row.${join.column})`);
-        let getValue2: Function = eval(`(row => row.${join.column2})`);
-        let lookup = side.reduce(
-            (map: Map<any, any>, row) => {
-                map.set(getValue2(row), row[sideTable]);
+        // TODO: make a lookup map for the RHS table, keyed by the join value
+        let getRhsValue: Function = eval(`(tuple => tuple.${rhsTable}.${rhsField})`);
+        let rhsTableLookup = rhsRowset.reduce(
+            (map: Map<any, any>, tuple) => {
+                let rhsValue = getRhsValue(tuple);
+                if (map.has(rhsValue)) {
+                    // TODO: would be better to assume *one* of wither the LHS or RHS colref is a unique key. Try one then try the other. Will need to factor some code into a function...
+                    throw new Error(`${rhsTable}.${rhsField} is not a unique key. In every join clause 'A JOIN B on A.C = B.D, SQL2ADT requires that B.D references a unique key`);
+                }
+                map.set(rhsValue, tuple[rhsTable]);
                 return map;
             },
             new Map()
         );
 
-        // Iterate over the main table rows, adding in the matching side table rows or nullifying the whole thing if no match
-        main = main.map(tuple => {
-            let val = getValue(tuple);
-            let sideRow = lookup.get(val);
-            if (!sideRow) return null;
-            tuple[sideTable] = sideRow; // NB: modified in place
+        // Iterate over the LHS table's rows, adding in the matching RHS table rows or nullifying the whole thing if no match
+        let getLhsValue: Function = eval(`(tuple => tuple.${lhsTable}.${lhsField})`);
+        let newRowset = lhsRowset.map(tuple => {
+            let lhsValue = getLhsValue(tuple);
+            let matchingRhsTuple = rhsTableLookup.get(lhsValue);
+            if (!matchingRhsTuple) return null;
+            tuple[rhsTable] = matchingRhsTuple; // NB: modified in place
             return tuple;
         }).filter(tuple => tuple !== null);
-    });
+        
+        // The side rowset has now been subsumed into the main rowset, and can be discarded
+        rowsets = rowsets.filter(rowset => rowset !== lhsRowset && rowset !== rhsRowset).concat([newRowset]);
+    }
+    let result = rowsets.length === 1 ? rowsets[0] : [];
 
     // TODO: perform the projections
     let project: Function = eval(`(tuple => ({${projs.map(p => `${p.alias}: tuple.${p.column}`)}}))`);
-    main = main.map(tuple => project(tuple));
+    result = result.map(tuple => project(tuple));
 
-    return main;
+    return result;
+
+
+
+
+
+
 
 
 
@@ -90,43 +101,43 @@ export default async function execute(databasePath: string, sql: string): Promis
 
 
 
-// TODO: ...
-function extractJoinFor(mainTables: string[], sideTable: string, joins: Join[]) {
+// // TODO: ...
+// function extractJoinFor(mainTables: string[], sideTable: string, joins: Join[]) {
 
-    let joinTables = joins.map(join => {
-        return {
-            a: join.column.slice(0, join.column.indexOf('.')),
-            b: join.column2.slice(0, join.column2.indexOf('.'))
-        };
-    });
+//     let joinTables = joins.map(join => {
+//         return {
+//             a: join.column.slice(0, join.column.indexOf('.')),
+//             b: join.column2.slice(0, join.column2.indexOf('.'))
+//         };
+//     });
 
-    for (let i = 0; i < joinTables.length; ++i) {
-        let joinTable = joinTables[i];
+//     for (let i = 0; i < joinTables.length; ++i) {
+//         let joinTable = joinTables[i];
 
 
-        if (mainTables.indexOf(joinTable.a) !== -1 && sideTable === joinTable.b) {
-            let result = joins[i];
-            joins.splice(i, 1);
-            return result;
-        }
-        else if (mainTables.indexOf(joinTable.b) !== -1 && sideTable === joinTable.a) {
-            let result = {type: 'join', column: joins[i].column2, column2: joins[i].column} as Join;
-            joins.splice(i, 1);
-            return result;
-        }
-    }
+//         if (mainTables.indexOf(joinTable.a) !== -1 && sideTable === joinTable.b) {
+//             let result = joins[i];
+//             joins.splice(i, 1);
+//             return result;
+//         }
+//         else if (mainTables.indexOf(joinTable.b) !== -1 && sideTable === joinTable.a) {
+//             let result = {type: 'join', column: joins[i].column2, column2: joins[i].column} as Join;
+//             joins.splice(i, 1);
+//             return result;
+//         }
+//     }
 
-    // TODO: if we get here something is very wrong (nothing joins side table to main tables)
+//     // TODO: if we get here something is very wrong (nothing joins side table to main tables)
 
-    // BUG: see next comment
+//     // BUG: see next comment
 
-    // TODO: but this *can* happen when the rowsets become sorted such that eg the first two rowsets don't have a direct join, since the sorting is by rowset length, regardless of what joins what
-    // how to fix?
-    // - different sort order which guarantees the rest works fine?
-    // - different algorithm?
+//     // TODO: but this *can* happen when the rowsets become sorted such that eg the first two rowsets don't have a direct join, since the sorting is by rowset length, regardless of what joins what
+//     // how to fix?
+//     // - different sort order which guarantees the rest works fine?
+//     // - different algorithm?
 
-    throw new Error(`Internal error`);
-}
+//     throw new Error(`Internal error`);
+// }
 
 
 
