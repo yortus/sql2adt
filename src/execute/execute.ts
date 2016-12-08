@@ -76,13 +76,13 @@ export default async function execute(databasePath: string, sql: string): Promis
 
 
 
-    // 1. construct per-table simple constant filter functions
-    // 2. fetch rows for all tables
-    // 3. perform inner joins to create tuples
-    //    3.1 for each join, make an 'index' for the smaller rowset (use ES6 Map)
-    //    3.2 for each row in the larger rowset, either make a tuple or discard the row
-    // 4. ensure ALL restrictions have been used (sanity check)
-    // 5. perform projection
+    // [x] 1. construct per-table simple constant filter functions
+    // [x] 2. fetch rows for all tables
+    // [ ] 3. perform inner joins to create tuples
+    // [x]    3.1 for each join, make an 'index' for the smaller rowset (use ES6 Map)
+    // [x]    3.2 for each row in the larger rowset, either make a tuple or discard the row
+    // [ ] 4. ensure ALL restrictions have been used (sanity check)
+    // [x] 5. perform projection
 
 }
 
