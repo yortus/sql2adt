@@ -38,6 +38,9 @@ describe('Executing a query', () => {
             rows => expect(rows[1].PUR_DATE).is.a('Date'),
             rows => expect((rows.find(row => row.SYMBOL === 'VG').PUR_DATE as Date).getFullYear()).to.equal(1987)
         ],
+        `SELECT t.Address as Addr FROM CUST_BAK t`, [
+            rows => expect(rows.length).to.equal(0),
+        ],
     ];
 
     for (let i = 0; i < tests.length; i += 2) {
