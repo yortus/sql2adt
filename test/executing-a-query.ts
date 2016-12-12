@@ -29,7 +29,15 @@ describe('Executing a query', () => {
             rows => expect(rows.length).to.equal(16),
             rows => expect(Object.keys(rows[0])).deep.equal(['OrderNo', 'total', 'Qty', 'desc']),
             rows => expect(rows.every(row => row.desc === 'Regulator System')).equals(true, `all descs are 'Regulator System'`),
-        ]
+        ],
+        `
+            SELECT h.ACCT_NBR as ACCT_NBR, h.SYMBOL as SYMBOL, h.SHARES as SHARES, h.PUR_PRICE as PUR_PRICE, h.PUR_DATE as PUR_DATE
+            FROM HOLDINGS h
+        `, [
+            rows => expect(rows.length).to.equal(36),
+            rows => expect(rows[1].PUR_DATE).is.a('Date'),
+            rows => expect((rows.find(row => row.SYMBOL === 'VG').PUR_DATE as Date).getFullYear()).to.equal(1987)
+        ],
     ];
 
     for (let i = 0; i < tests.length; i += 2) {
