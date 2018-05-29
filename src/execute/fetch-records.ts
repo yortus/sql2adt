@@ -19,14 +19,33 @@ export default function fetchRecords(databasePath: string, tableName: string, fi
 
             table.eachRecord(
                 (err, row) => {
+                    // If an error occurred on a previous row, skip all callback calls after that.
                     if (rowError) return;
-                    if (err) return reject(rowError = err);
+
+                    // An error occured on this row. Set the flag to skip further row processing, and return the error.
+                    if (err) {
+                        rowError = err;
+                        table.close();
+                        return reject(err);
+                    }
+
+                    // Add the row to the results.
                     let tuple = {[tableName]: row};
                     if (filter(tuple)) rows.push(tuple);
                 },
                 err => {
+                    // If an error occurred on a row, then we've already handled it and returned. Nothing else to do.
                     if (rowError) return;
-                    if (err) return reject(err);
+
+                    // Ensure we close the table, otherwise the file descriptor will remain open until the process dies.
+                    table.close();
+
+                    // Some non-row-specific error has occurred. Return the error.
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    // All rows processed successfully. Return the rows.
                     return resolve(rows);
                 }
             );
