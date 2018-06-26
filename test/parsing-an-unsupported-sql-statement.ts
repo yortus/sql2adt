@@ -47,6 +47,13 @@ describe('Parsing an unsupported SQL statement', () => {
         `SELECT t1.c1 AS c1 FROM t1 WHERE (t1.x = 'alpha')`,
         `SELECT t1.c1 AS c1 FROM t1 WHERE SUBSTRING(t1.x, 3, 1) = 'n'`,
 
+        // LIMIT must come before OFFSET
+        `SELECT table.colname AS alias FROM table OFFSET 30 LIMIT 5`,
+
+        // LIMIT/OFFSET cannot appear with JOIN/WHERE
+        `SELECT t1.c1 AS c1 FROM table1 as t1 INNER JOIN table2 as t2 ON t1.id = t2.id LIMIT 5`,
+        `SELECT table.colname AS alias FROM table WHERE table.date > '2016-12-01' OFFSET 10`,
+
         // TODO: only SELECT, FROM and WHERE clauses are supported...
         // TODO: subqueries are not supported...
     ];

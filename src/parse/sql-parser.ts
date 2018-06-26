@@ -32,6 +32,8 @@ export interface AST {
     tables: string[];
     restrictions: Restriction[];
     projections: Projection[];
+    limit?: number;
+    offset?: number;
 }
 export type Restriction = Join | EqValue | GtValue | LtValue | NeValue | GeValue | LeValue
 export type Join = { type: 'join', column: string; column2: string; }

@@ -16,8 +16,8 @@ describe('Executing a query', () => {
             rows => expect(rows.length).to.equal(7),
             rows => expect(rows.some(row => row.NAME === 'Angel Fish')).is.true,
             rows => expect(Object.keys(rows[0]).sort()).deep.equal(['NAME']),
-            rows => expect(rows).includes({NAME: 'Angel Fish'}),
-            rows => expect(rows).includes({NAME: 'Ocelot'}),
+            rows => expect(rows).to.deep.include({NAME: 'Angel Fish'}),
+            rows => expect(rows).to.deep.include({NAME: 'Ocelot'}),
         ],
         `
             SELECT o.OrderNo as OrderNo, o.ItemsTotal as total, i.Qty as Qty, p.Description as desc
@@ -40,6 +40,21 @@ describe('Executing a query', () => {
         ],
         `SELECT t.Address as Addr FROM CUST_BAK t`, [
             rows => expect(rows.length).to.equal(0),
+        ],
+        `SELECT c.CustNo as CustNo, c.Addr1 as Addr1, c.Contact as Contact FROM customer c LIMIT 5`, [
+            rows => expect(rows.length).to.equal(5),
+            rows => expect(rows[0].CustNo).to.equal(1221),
+            rows => expect(rows[4].Contact).to.equal('Chris Thomas')
+        ],
+        `SELECT c.CustNo as CustNo, c.Addr1 as Addr1, c.Contact as Contact FROM customer c OFFSET 11`, [
+            rows => expect(rows.length).to.equal(44),
+            rows => expect(rows[0].CustNo).to.equal(1563),
+            rows => expect(rows[43].Contact).to.equal('Louise Franks')
+        ],
+        `SELECT c.CustNo as CustNo, c.Addr1 as Addr1, c.Contact as Contact FROM customer c LIMIT 10 OFFSET 50`, [
+            rows => expect(rows.length).to.equal(5),
+            rows => expect(rows[0].CustNo).to.equal(6312),
+            rows => expect(rows[4].Contact).to.equal('Louise Franks')
         ],
     ];
 

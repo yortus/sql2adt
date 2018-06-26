@@ -21,12 +21,15 @@ export default async function execute(databasePath: string, sql: string): Promis
         usedRestrictions += localPredicates.length;
         let predicateSources = localPredicates.map(cond => `tuple.${cond.column} ${jsBinaryOperator(cond)} ${JSON.stringify(cond.value)}`);
         if (predicateSources.length === 0) predicateSources = ['true'];
-        let filter = eval(`(tuple => (${predicateSources.join(') && (')}))`);
+        let filter: (row: any) => boolean = eval(`(tuple => (${predicateSources.join(') && (')}))`);
         return filter;
     });
 
     // TODO: fetch all rowsets with table-level filtering...
-    let rowsets = await Promise.all(tableNames.map((tableName, i) => fetchRecords(databasePath, tableName, filters[i])));
+    let rowsets = await Promise.all(tableNames.map((tableName, i) => {
+        let options = {filter: filters[i], limit: ast.limit, offset: ast.offset};
+        return fetchRecords(databasePath, tableName, options);
+    }));
 
     // TODO: consume each join until there is a single rowset left
     // TODO: Also if any rowset is empty then the final result is also empty
@@ -61,7 +64,10 @@ export default async function execute(databasePath: string, sql: string): Promis
 
     // TODO: perform the projections
     let project: Function = eval(`(tuple => ({${projs.map(p => `${p.alias}: tuple.${p.column}`)}}))`);
-    result = result.map(tuple => project(tuple));
+    result = result.map(tuple => {
+        let result = project(tuple);
+        return result;
+    });
 
     // TODO: sanity check - were all restrictions consumed to produce the final result?
     if (usedRestrictions !== ast.restrictions.length) {

@@ -5,7 +5,7 @@ import Adt = require('node_adt');
 
 
 
-export default function fetchRecords(databasePath: string, tableName: string, filter: (row: any) => boolean = () => true): Promise<any[]> {
+export default function fetchRecords(databasePath: string, tableName: string, options: FetchOptions): Promise<any[]> {
     let tablePath = path.join(databasePath, tableName + '.adt');
 
     return new Promise((resolve, reject) => {
@@ -16,8 +16,8 @@ export default function fetchRecords(databasePath: string, tableName: string, fi
             let rows: any[] = [];
             let rowError: any = null;
 
-
             table.eachRecord(
+                {limit: options.limit, offset: options.offset},
                 (err, row) => {
                     // If an error occurred on a previous row, skip all callback calls after that.
                     if (rowError) return;
@@ -31,7 +31,7 @@ export default function fetchRecords(databasePath: string, tableName: string, fi
 
                     // Add the row to the results.
                     let tuple = {[tableName]: row};
-                    if (filter(tuple)) rows.push(tuple);
+                    if (!options.filter || options.filter(tuple)) rows.push(tuple);
                 },
                 err => {
                     // If an error occurred on a row, then we've already handled it and returned. Nothing else to do.
@@ -51,4 +51,14 @@ export default function fetchRecords(databasePath: string, tableName: string, fi
             );
         });
     });
+}
+
+
+
+
+
+export interface FetchOptions {
+    filter?: (row: any) => boolean;
+    limit?: number;
+    offset?: number;
 }

@@ -1,5 +1,10 @@
 SelectStatement
-=   WS   select:SelectClause   WS   from:FromClause   where:(WS   WhereClause)?   WS   !.
+=   WS   select:SelectClause   WS
+    from:FromClause
+    where:(WS   WhereClause)?
+    lim:(WS   LimitClause)?
+    off:(WS   OffsetClause)?
+    WS   !.
     {
         let tables = from.tables.map(el => el.name);
         let tableAliases = from.tables.reduce((map, t) => (map[t.alias] = t.name, map), {});
@@ -12,7 +17,14 @@ SelectStatement
             }
         });
         let projections = select.map(s => ({column: dealias(s.column), alias: s.alias}));
-        return {tables, restrictions, projections};
+        let limit = lim ? lim[1] : undefined;
+        let offset = off ? off[1] : undefined;
+
+        if ((tables.length > 1 || !!where) && (!!lim || !!off)) {
+            throw new Error('A query with a JOIN or WHERE clause cannot have a LIMIT or OFFSET clause');
+        }
+
+        return {tables, restrictions, projections, limit, offset};
 
         function dealias(s) {
             let i = s.indexOf('.');
@@ -29,7 +41,7 @@ ResultColumns
     { return [first].concat(rest.map(el => el[3])); }
 
 ResultColumn
-=   column:QualifiedColumnReference   alias:(WS   "AS"i?   WS   ID)?
+=   column:QualifiedColumnReference   alias:(WS   "AS"i?   WS   ID)
     { return {column, alias: alias && alias[3]}; }
 
 FromClause
@@ -41,8 +53,8 @@ FromClause
     }
 
 Table
-=   name:ID   alias:(WS   !"WHERE"i   "AS"i?   WS   ID)?
-    { return {name, alias: alias && alias[4]}; }
+=   name:ID   alias:(WS   "AS"i?   WS   ID)?
+    { return {name, alias: alias && alias[3]}; }
 
 JoinClause
 =   WS   "INNER JOIN"i   WS   table:Table   WS   "ON"i   WS    on:JoinRestriction
@@ -68,6 +80,12 @@ LogicalExpr
 QualifiedColumnReference
 =   tableName:ID   "."   columnName:ID   { return text(); }
 
+LimitClause
+=   "LIMIT"i   WS   n:NumericLiteral   { return 5; }
+
+OffsetClause
+=   "OFFSET"i   WS   n:NumericLiteral   { return n; }
+
 Literal
 =   StringLiteral
 /   NumericLiteral
@@ -79,5 +97,6 @@ StringLiteral
 NumericLiteral
 =   [0-9]+   { return parseInt(text()); }
 
-ID = [a-z_]i [a-z0-9_]i*   { return text(); }
+ID = !KEYWORD   [a-z_]i [a-z0-9_]i*   { return text(); }
+KEYWORD = "SELECT"i / "FROM"i / "AS"i / "INNER"i / "JOIN"i / "ON"i / "WHERE"i / "AND"i / "LIMIT"i / "OFFSET"i
 WS = [ \t\r\n]*
