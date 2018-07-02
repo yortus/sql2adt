@@ -30,7 +30,7 @@
   "license": "MIT",
   "homepage": "https://github.com/paypac/sql2adt#readme",
   "dependencies": {
-    "node_adt": "paypac/node_adt"
+    "node_adt": "^1.1.5"
   },
   "devDependencies": {
     "@types/chai": "^4.1.4",
