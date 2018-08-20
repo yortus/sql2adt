@@ -81,7 +81,7 @@ QualifiedColumnReference
 =   tableName:ID   "."   columnName:ID   { return text(); }
 
 LimitClause
-=   "LIMIT"i   WS   n:NumericLiteral   { return 5; }
+=   "LIMIT"i   WS   n:NumericLiteral   { return n; }
 
 OffsetClause
 =   "OFFSET"i   WS   n:NumericLiteral   { return n; }
