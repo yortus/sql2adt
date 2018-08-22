@@ -106,8 +106,15 @@ export class AdtFile {
         if (finishedIndex < startingIndex) finishedIndex = startingIndex;
         if (finishedIndex > this.header.recordCount) finishedIndex = this.header.recordCount;
 
-        // Calculate column name indices to be fetched
-        // this.columns.map()
+        // Calculate column name whitelist
+        let columnWhitelist = this.columns.map(() => true);
+        if (options.columnNames) {
+            for (let i = 0; i < this.columns.length; ++i) {
+                if (!options.columnNames.includes(this.columns[i].name)) {
+                    columnWhitelist[i] = false;
+                }
+            }
+        }
 
         let records = [] as Record[];
         let iteratedCount = 0;
@@ -122,7 +129,7 @@ export class AdtFile {
             // TODO: desired semantics for deleted records????
             // read next record, unless it is marked as deleted (first byte = 0x05)
             if (buffer.readInt8(0) !== 5) {
-                records.push(this.parseRecord(buffer));
+                records.push(this.parseRecord(buffer, columnWhitelist));
             }
 
             ++iteratedCount;
@@ -141,7 +148,7 @@ export class AdtFile {
         let tempBuffer = new Buffer(length);
 
         let {buffer} = await fsRead(this.fd, tempBuffer, 0, length, start);
-        let record = this.parseRecord(buffer);
+        let record = this.parseRecord(buffer, this.columns.map(() => true));
         return record;
     }
 
@@ -200,9 +207,10 @@ export class AdtFile {
         return columns;
     }
 
-    private parseRecord(buffer: Buffer) {
+    private parseRecord(buffer: Buffer, columnWhitelist: boolean[]) {
         let record = {} as Record;
         for (let i = 0; i < this.header.columnCount; ++i) {
+            if (!columnWhitelist[i]) continue;
             let column = this.columns[i];
             record[column.name] = this.parseField(buffer, column.type, column.offset, column.length);
         }
