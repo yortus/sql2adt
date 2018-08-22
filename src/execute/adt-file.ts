@@ -181,17 +181,19 @@ export class AdtFile {
         let {buffer} = await fsRead(fd, tempBuffer, 0, columnsLength, HEADER_LENGTH);
 
         let columns = [] as Column[];
-        let offset = 0;
 
-        for (var i = 0; i < header.columnCount; ++i) {
-            var column = buffer.slice(COLUMN_LENGTH * i);
+        // NB: skip the first 5 bytes, don't know what they are for and they don't contain the data.
+        let offset = 5;
+
+        for (let i = 0; i < header.columnCount; ++i) {
+            let column = buffer.slice(COLUMN_LENGTH * i);
 
             // column names are the first 128 bytes and column info takes up the last 72 bytes.
             // byte 130 contains a 16-bit column type
             // byte 136 contains a 16-bit length field
-            var name = iconv.decode(column.slice(0, 128), encoding).replace(/\0/g, '').trim();
-            var type = column.readUInt16LE(129);
-            var length = column.readUInt16LE(135);
+            let name = iconv.decode(column.slice(0, 128), encoding).replace(/\0/g, '').trim();
+            let type = column.readUInt16LE(129);
+            let length = column.readUInt16LE(135);
             columns.push({name: name, type: type, offset, length: length});
             offset += length;
         }
@@ -199,78 +201,57 @@ export class AdtFile {
     }
 
     private parseRecord(buffer: Buffer) {
-
-        // skip the first 5 bytes, don't know what they are for and they don't contain the data.
-        buffer = buffer.slice(5);
-
-        var record = {} as Record;
-
-        for (var i = 0; i < this.header.columnCount; ++i) {
+        let record = {} as Record;
+        for (let i = 0; i < this.header.columnCount; ++i) {
             let column = this.columns[i];
-            var field = buffer.slice(column.offset, column.offset + column.length);
-            record[column.name] = this.parseField(field, column.type, column.length);
+            record[column.name] = this.parseField(buffer, column.type, column.offset, column.length);
         }
-
         return record;
     }
 
     // Reference:
     // http://devzone.advantagedatabase.com/dz/webhelp/advantage8.1/server1/adt_field_types_and_specifications.htm
-    private parseField(buffer: Buffer, type: number, length: number) {
-        var value;
-
+    private parseField(buffer: Buffer, type: number, start: number, length: number) {
         switch(type) {
             case ColumnType.CHARACTER:
             case ColumnType.CICHARACTER:
-                value = iconv.decode(buffer, this.encoding).replace(/\0/g, '').trim();
-                break;
+                return iconv.decode(buffer.slice(start, start + length), this.encoding).replace(/\0/g, '').trim();
 
             case ColumnType.NCHAR:
-                value = buffer.toString('ucs2', 0, length).replace(/\0/g, '').trim();
-                break;
+                return buffer.toString('ucs2', start, start + length).replace(/\0/g, '').trim();
 
             case ColumnType.DOUBLE:
-                value = buffer.readDoubleLE(0);
-                break;
+                return buffer.readDoubleLE(start);
 
             case ColumnType.AUTOINCREMENT:
-                value = buffer.readUInt32LE(0);
-                break;
+                return buffer.readUInt32LE(start);
 
             case ColumnType.INTEGER:
-                value = buffer.readInt32LE(0);
-                if (value === -2147483648) value = null;
-                break;
+                let ival = buffer.readInt32LE(start);
+                return ival === -2147483648 ? null : ival;
 
             case ColumnType.SHORT:
-                value = buffer.readInt16LE(0);
-                break;
+                return buffer.readInt16LE(start);
 
             case ColumnType.LOGICAL:
-                var b = iconv.decode(buffer, this.encoding);
-                value = (b === 'T' || b === 't' || b === '1' || b === 'Y' || b === 'y' || b === ' ')
-                break;
+                let b = iconv.decode(buffer.slice(start, start + length), this.encoding);
+                return (b === 'T' || b === 't' || b === '1' || b === 'Y' || b === 'y' || b === ' ')
 
             case ColumnType.DATE:
-                var julian = buffer.readInt32LE(0);
-                value = julian === 0 ? null : new Date((julian - JULIAN_1970) * MS_PER_DAY);
-                break;
+                let julian = buffer.readInt32LE(start);
+                return julian === 0 ? null : new Date((julian - JULIAN_1970) * MS_PER_DAY);
 
             case ColumnType.TIMESTAMP:
-                var julian = buffer.readInt32LE(0);
-                var ms = buffer.readInt32LE(4);
-                value = julian === 0 && ms === -1 ? null : new Date((julian - JULIAN_1970) * MS_PER_DAY + ms);
-                break;
+                let julian2 = buffer.readInt32LE(start);
+                let ms = buffer.readInt32LE(start + 4);
+                return julian2 === 0 && ms === -1 ? null : new Date((julian2 - JULIAN_1970) * MS_PER_DAY + ms);
 
             // not implemented
             case ColumnType.TIME:
-                value = buffer;
-                break;
+                return buffer;
 
             default:
-                value = null;
+                return null;
         }
-
-        return value;
     }
 }
