@@ -73,6 +73,7 @@ interface Header {
 interface Column {
     name: string;
     type: ColumnType;
+    offset: number;
     length: number;
 }
 export interface Record {
@@ -94,7 +95,7 @@ export class AdtFile {
     }
 
     // TODO: jsdoc...
-    async fetchRecords(options?: {offset?: number, limit?: number}) {
+    async fetchRecords(options?: {offset?: number, limit?: number, columnNames?: string[]}) {
         options = options || {};
 
         // Calculate iteration limits
@@ -104,6 +105,9 @@ export class AdtFile {
         let finishedIndex =  typeof options.limit === 'number' ? startingIndex + options.limit : this.header.recordCount;
         if (finishedIndex < startingIndex) finishedIndex = startingIndex;
         if (finishedIndex > this.header.recordCount) finishedIndex = this.header.recordCount;
+
+        // Calculate column name indices to be fetched
+        // this.columns.map()
 
         let records = [] as Record[];
         let iteratedCount = 0;
@@ -177,6 +181,7 @@ export class AdtFile {
         let {buffer} = await fsRead(fd, tempBuffer, 0, columnsLength, HEADER_LENGTH);
 
         let columns = [] as Column[];
+        let offset = 0;
 
         for (var i = 0; i < header.columnCount; ++i) {
             var column = buffer.slice(COLUMN_LENGTH * i);
@@ -187,7 +192,8 @@ export class AdtFile {
             var name = iconv.decode(column.slice(0, 128), encoding).replace(/\0/g, '').trim();
             var type = column.readUInt16LE(129);
             var length = column.readUInt16LE(135);
-            columns.push({name: name, type: type, length: length});
+            columns.push({name: name, type: type, offset, length: length});
+            offset += length;
         }
         return columns;
     }
@@ -198,14 +204,11 @@ export class AdtFile {
         buffer = buffer.slice(5);
 
         var record = {} as Record;
-        var offset = 0;
 
         for (var i = 0; i < this.header.columnCount; ++i) {
-            var start = offset;
-            var end = offset + this.columns[i].length;
-            var field = buffer.slice(start, end);
-            record[this.columns[i].name] = this.parseField(field, this.columns[i].type, this.columns[i].length);
-            offset += this.columns[i].length;
+            let column = this.columns[i];
+            var field = buffer.slice(column.offset, column.offset + column.length);
+            record[column.name] = this.parseField(field, column.type, column.length);
         }
 
         return record;
