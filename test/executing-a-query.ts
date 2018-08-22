@@ -5,7 +5,6 @@ import {execute} from 'sql2adt';
 
 
 
-
 describe('Executing a query', () => {
 
     const DB_PATH = path.join(__dirname, './fixtures/ADS_DATA');

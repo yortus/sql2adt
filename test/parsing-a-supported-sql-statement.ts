@@ -4,7 +4,6 @@ import {parseSQL} from 'sql2adt';
 
 
 
-
 describe('Parsing a supported SQL statement', () => {
 
     let tests = [

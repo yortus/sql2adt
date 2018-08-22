@@ -1,6 +1,5 @@
 import parseSQL, {Restriction, Join, EqValue, NeValue, GtValue, GeValue, LtValue, LeValue} from '../parse';
-import fetchRecords from './fetch-records';
-
+import {fetchRecords, FetchOptions} from './fetch-records';
 
 
 
@@ -27,7 +26,7 @@ export default async function execute(databasePath: string, sql: string): Promis
 
     // TODO: fetch all rowsets with table-level filtering...
     let rowsets = await Promise.all(tableNames.map((tableName, i) => {
-        let options = {filter: filters[i], limit: ast.limit, offset: ast.offset};
+        let options: FetchOptions = {filter: filters[i], limit: ast.limit, offset: ast.offset};
         return fetchRecords(databasePath, tableName, options);
     }));
 
@@ -81,7 +80,6 @@ export default async function execute(databasePath: string, sql: string): Promis
 
 
 
-
 // TODO: ...
 function joinRowsets(join: Join, lhsRowset: any[], rhsRowset: any[]): any[] {
 
@@ -117,7 +115,6 @@ function joinRowsets(join: Join, lhsRowset: any[], rhsRowset: any[]): any[] {
     // All done.
     return joinedRowset;
 }
-
 
 
 

@@ -3,7 +3,6 @@ const grammar: { parse(text: string): AST; } = require('./sql-grammar');
 
 
 
-
 /**
  * Verifies that `sql` is a valid SQL statement and returns abstract syntax information about the statement.
  * @param {string} sql - the SQL statement to be parsed.
@@ -22,7 +21,6 @@ export default function parseSQL(sql: string): AST {
         throw new Error(`${ex.message}:\n${sql}\n${indicator}`);
     }
 }
-
 
 
 
