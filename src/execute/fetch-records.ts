@@ -8,7 +8,7 @@ export async function fetchRecords(databasePath: string, tableName: string, opti
     let tablePath = path.join(databasePath, tableName + '.adt');
     let adt = await AdtFile.open(tablePath, 'ISO-8859-1');
     try {
-        let records = await adt.fetchRecords({limit: options.limit, offset: options.offset});
+        let records = await adt.fetchRecords();
         let rows = records.map(rec => ({[tableName]: rec}));
         if (options.filter) rows = rows.filter(options.filter);
         return rows;
@@ -23,6 +23,4 @@ export async function fetchRecords(databasePath: string, tableName: string, opti
 
 export interface FetchOptions {
     filter?: (row: any) => boolean;
-    limit?: number;
-    offset?: number;
 }

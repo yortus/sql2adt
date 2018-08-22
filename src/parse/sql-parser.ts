@@ -8,7 +8,7 @@ const grammar: { parse(text: string): AST; } = require('./sql-grammar');
  * @param {string} sql - the SQL statement to be parsed.
  * @returns {AST} an object containing details about the successfully parsed SQL statement.
  */
-export default function parseSQL(sql: string): AST {
+export function parseSQL(sql: string): AST {
     try {
         let ast = grammar.parse(sql);
         return ast;

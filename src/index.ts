@@ -1,2 +1,2 @@
-export {default as parseSQL} from './parse';
-export {default as execute} from './execute';
+export {parseSQL} from './parse';
+export {execute} from './execute';

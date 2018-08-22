@@ -11,9 +11,10 @@ Supported SQL clauses (examples):
 
 
 Restrictions:
+- Table names, column names and aliases *must* conform to `[A-Za-z_][A-Za-z_0-9]*`.
 - Columns in the `SELECT` clause *must* have aliases.
 - The `WHERE` clause only supports basic relative operators and `AND`.
-- `LIMIT` and `OFFSET` *cannot* be used if there is a `JOIN` or `WHERE` clause.
+- `LIMIT` and `OFFSET` may only be used in queries on a single table with no `WHERE` clause.
 
 
 For more examples of valid and invalid queries, consult the unit tests.

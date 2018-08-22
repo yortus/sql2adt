@@ -40,17 +40,17 @@ describe('Executing a query', () => {
         `SELECT t.Address as Addr FROM CUST_BAK t`, [
             rows => expect(rows.length).to.equal(0),
         ],
-        `SELECT c.CustNo as CustNo, c.Addr1 as Addr1, c.Contact as Contact FROM customer c LIMIT 7`, [
+        `SELECT c.CustNo as CustNo, c.Addr1 as Addr, c.Contact as Contact FROM customer c LIMIT 7`, [
             rows => expect(rows.length).to.equal(7),
             rows => expect(rows[0].CustNo).to.equal(1221),
             rows => expect(rows[4].Contact).to.equal('Chris Thomas')
         ],
-        `SELECT c.CustNo as CustNo, c.Addr1 as Addr1, c.Contact as Contact FROM customer c OFFSET 11`, [
+        `SELECT c.CustNo as CustNo, c.Addr1 as Addr, c.Contact as Contact FROM customer c OFFSET 11`, [
             rows => expect(rows.length).to.equal(44),
             rows => expect(rows[0].CustNo).to.equal(1563),
             rows => expect(rows[43].Contact).to.equal('Louise Franks')
         ],
-        `SELECT c.CustNo as CustNo, c.Addr1 as Addr1, c.Contact as Contact FROM customer c LIMIT 20 OFFSET 40`, [
+        `SELECT c.CustNo as CustNo, c.Addr1 as Addr, c.Contact as Contact FROM customer c LIMIT 20 OFFSET 40`, [
             rows => expect(rows.length).to.equal(15), // there are 55 rows total, so we effectively get the last 15
             rows => expect(rows[0].CustNo).to.equal(4684),
             rows => expect(rows[4].Contact).to.equal('Isabelle Neece')

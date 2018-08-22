@@ -1,10 +1,12 @@
-import parseSQL, {Restriction, Join, EqValue, NeValue, GtValue, GeValue, LtValue, LeValue} from '../parse';
+import {parseSQL, Restriction, Join, EqValue, NeValue, GtValue, GeValue, LtValue, LeValue} from '../parse';
 import {fetchRecords, FetchOptions} from './fetch-records';
+import * as path from 'path';
+import {AdtFile} from './adt-file';
 
 
 
 
-export default async function execute(databasePath: string, sql: string): Promise<any[]> {
+export async function execute(databasePath: string, sql: string): Promise<any[]> {
 
     // Parse the SQL statement to get an AST.
     let ast = parseSQL(sql);
@@ -13,6 +15,29 @@ export default async function execute(databasePath: string, sql: string): Promis
     let predicates = ast.restrictions.filter(r => r.type !== 'join') as (EqValue|NeValue|GtValue|GeValue|LtValue|LeValue)[];
     let projs = ast.projections;
     let usedRestrictions = 0;
+
+    // Handle simple case: single table query with no WHERE clause. LIMIT/OFFSET are only valid for this case.
+    if (tableNames.length === 1 && predicates.length === 0) {
+        // TODO: ...
+        let tablePath = path.join(databasePath, tableNames[0] + '.adt');
+        let adt = await AdtFile.open(tablePath, 'ISO-8859-1');
+        try {
+            let records = await adt.fetchRecords({limit: ast.limit, offset: ast.offset});
+
+            // Skip performing projections if all aliases match their column name.
+            // TODO: but there may be extra fields, is that OK?
+            if (projs.every(p => p.column.split('.')[1] === p.alias)) return records;
+
+            // Perform the projections.
+            let kvps = projs.map(p => `${p.alias}: r.${p.column.split('.')[1]}`);
+            let project: (record: object) => object = eval(`(r => ({${kvps.join(', ')}}))`);
+            records = records.map(project);
+            return records;
+        }
+        finally {
+            adt.close();
+        }
+    }
 
     // TODO: build a filter function for each table
     let filters = tableNames.map(tableName => {
@@ -26,7 +51,7 @@ export default async function execute(databasePath: string, sql: string): Promis
 
     // TODO: fetch all rowsets with table-level filtering...
     let rowsets = await Promise.all(tableNames.map((tableName, i) => {
-        let options: FetchOptions = {filter: filters[i], limit: ast.limit, offset: ast.offset};
+        let options: FetchOptions = {filter: filters[i]};
         return fetchRecords(databasePath, tableName, options);
     }));
 
