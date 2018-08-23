@@ -18,6 +18,14 @@ describe('Executing a query', () => {
             rows => expect(rows).to.deep.include({NAME: 'Angel Fish'}),
             rows => expect(rows).to.deep.include({NAME: 'Ocelot'}),
         ],
+        `SELECT a.NAME as NAME, ROWINDEX AS rowNum FROM animals a`, [
+            rows => expect(rows.length).to.equal(7),
+            rows => expect(rows.some(row => row.NAME === 'Angel Fish')).is.true,
+            rows => expect(Object.keys(rows[0]).sort()).deep.equal(['NAME', 'rowNum']),
+            rows => expect(rows).to.deep.include({NAME: 'Angel Fish', rowNum: 0}),
+            rows => expect(rows).to.deep.include({NAME: 'Ocelot', rowNum: 4}),
+            rows => expect(rows.every((row, i) => row.rowNum === i)).is.true,
+        ],
         `
             SELECT o.OrderNo as OrderNo, o.ItemsTotal as total, i.Qty as Qty, p.Description as desc
             FROM orders o

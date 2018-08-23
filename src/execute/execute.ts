@@ -22,7 +22,8 @@ export async function execute(databasePath: string, sql: string): Promise<any[]>
         let adt = await AdtFile.open(tablePath);
         try {
             let columnNames = projs.map(p => p.column.split('.')[1]);
-            let records = await adt.fetchRecords({limit: ast.limit, offset: ast.offset, columnNames});
+            let rowIndexName = ast.rowIndexAlias;
+            let records = await adt.fetchRecords({limit: ast.limit, offset: ast.offset, columnNames, rowIndexName});
 
             // Skip performing projections if all aliases match their column name.
             // TODO: but there may be extra fields, is that OK?

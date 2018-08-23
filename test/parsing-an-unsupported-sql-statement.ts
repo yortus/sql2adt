@@ -49,7 +49,8 @@ describe('Parsing an unsupported SQL statement', () => {
         // LIMIT must come before OFFSET
         `SELECT table.colname AS alias FROM table OFFSET 30 LIMIT 5`,
 
-        // LIMIT/OFFSET cannot appear with JOIN/WHERE
+        // ROWINDEX/LIMIT/OFFSET cannot appear with JOIN/WHERE
+        `SELECT ROWINDEX AS alias FROM table WHERE table.date > '2016-12-01'`,
         `SELECT t1.c1 AS c1 FROM table1 as t1 INNER JOIN table2 as t2 ON t1.id = t2.id LIMIT 5`,
         `SELECT table.colname AS alias FROM table WHERE table.date > '2016-12-01' OFFSET 10`,
 

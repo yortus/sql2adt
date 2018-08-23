@@ -51,7 +51,7 @@ export class AdtFile {
      * @param options.limit number of records to read before returning. Default: <record count - offset>
      * @param options.columnNames subset of column names to return. Default: <all column names>
      */
-     async fetchRecords(options?: {offset?: number, limit?: number, columnNames?: string[]}) {
+     async fetchRecords(options?: {offset?: number, limit?: number, columnNames?: string[], rowIndexName?: string}) {
         options = options || {};
         let header = this.header;
 
@@ -77,12 +77,13 @@ export class AdtFile {
         await fsRead(this.fd, buffer, 0, buffer.length, header.dataOffset + startingIndex * header.recordLength);
 
         // Parse each record out of the buffer into an object
-        let parseRecord = makeRecordParser(columns);
+        let parseRecord = makeRecordParser(columns, options.rowIndexName);
         let records = [] as Record[];
-        for (let recordOffset = 0; recordOffset < buffer.length; recordOffset += header.recordLength) {
+        let rowIndex = startingIndex;
+        for (let recordOffset = 0; recordOffset < buffer.length; recordOffset += header.recordLength, ++rowIndex) {
             // Skip records marked as deleted. When this happens, less than `limit` records will be returned.
             if (buffer.readInt8(recordOffset) === 0x05)  continue; // first byte of 0x05 indicates record is deleted
-            let record = parseRecord(buffer, recordOffset);
+            let record = parseRecord(buffer, recordOffset, rowIndex);
             records.push(record);
         }
         return records;
@@ -154,14 +155,15 @@ async function parseColumns(fd: number, header: Header) {
 
 
 /** Creates a fast record parsing function than is tailored to the given columns. */
-function makeRecordParser(columns: Column[]) {
+function makeRecordParser(columns: Column[], rowIndexName?: string) {
     [columns, parseField]; // Reference decls used only in evaled code, to prevent TS 'unused declaration' error.
-    let source =`((buffer, offset) => ({
+    let source =`((buffer, offset, rowIndex) => ({
+        ${rowIndexName ? `${rowIndexName}: rowIndex,` : ''}
         ${columns.map(col => `
             ${col.name}: parseField(buffer, ${col.type}, offset + ${col.offset}, ${col.length}),
         `).join('')}
     }))`;
-    return eval(source) as (buffer: Buffer, offset: number) => Record;
+    return eval(source) as (buffer: Buffer, offset: number, rowIndex: number) => Record;
 }
 
 

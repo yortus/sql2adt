@@ -16,15 +16,18 @@ SelectStatement
                 return {type: r.type, column: dealias(r.column), value: r.value};
             }
         });
+        let rowIndexInfo = select.find(s => s.column === '%.ROWINDEX');
+        let rowIndexAlias = (rowIndexInfo || {}).alias
+        select = select.filter(s => s.column !== '%.ROWINDEX');
         let projections = select.map(s => ({column: dealias(s.column), alias: s.alias}));
         let limit = lim ? lim[1] : undefined;
         let offset = off ? off[1] : undefined;
 
-        if ((tables.length > 1 || !!where) && (!!lim || !!off)) {
-            throw new Error('A query with a JOIN or WHERE clause cannot have a LIMIT or OFFSET clause');
+        if ((tables.length > 1 || !!where) && (!!rowIndexAlias || !!lim || !!off)) {
+            throw new Error('A query with a JOIN or WHERE clause cannot use ROWINDEX, LIMIT or OFFSET');
         }
 
-        return {tables, restrictions, projections, limit, offset};
+        return {tables, restrictions, projections, limit, offset, rowIndexAlias};
 
         function dealias(s) {
             let i = s.indexOf('.');
@@ -43,6 +46,8 @@ ResultColumns
 ResultColumn
 =   column:QualifiedColumnReference   alias:(WS   "AS"i?   WS   ID)
     { return {column, alias: alias && alias[3]}; }
+/   "ROWINDEX"i   WS   "AS"i?   WS   alias:ID
+    { return {column: '%.ROWINDEX', alias}; }
 
 FromClause
 =   "FROM"   WS   table:Table   joins:JoinClause*
