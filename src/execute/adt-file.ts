@@ -69,11 +69,13 @@ export class AdtFile {
         await fsRead(this.fd, buffer, 0, buffer.length, header.dataOffset + startingIndex * header.recordLength);
 
         // Parse each record out of the buffer into an object
+        let parseRecord = this.makeRecordParser(columnWhitelist);
         let records = [] as Record[];
         for (let recordOffset = 0; recordOffset < buffer.length; recordOffset += header.recordLength) {
             // Skip records marked as deleted. When this happens, less than `limit` records will be returned.
             if (buffer.readInt8(recordOffset) === 0x05)  continue; // first byte of 0x05 indicates record is deleted
-            records.push(this.parseRecord(buffer, recordOffset, columnWhitelist));
+            let record = parseRecord(buffer, recordOffset);
+            records.push(record);
         }
         return records;
     }
@@ -90,7 +92,8 @@ export class AdtFile {
         let tempBuffer = new Buffer(length);
 
         let {buffer} = await fsRead(this.fd, tempBuffer, 0, length, start);
-        let record = this.parseRecord(buffer, 0, this.columns.map(() => true));
+        let parseRecord = this.makeRecordParser(this.columns.map(() => true));
+        let record = parseRecord(buffer, 0);
         return record;
     }
 
@@ -109,14 +112,16 @@ export class AdtFile {
     }
 
     // TODO: jsdoc...
-    private parseRecord(buffer: Buffer, offset: number, columnWhitelist: boolean[]) {
-        let record = {} as Record;
-        for (let i = 0; i < this.columns.length; ++i) {
-            if (!columnWhitelist[i]) continue;
-            let column = this.columns[i];
-            record[column.name] = parseField(buffer, column.type, offset + column.offset, column.length);
-        }
-        return record;
+    private makeRecordParser(columnWhitelist: boolean[]) {
+        [parseField]; // Prevent TS 'unused declaration' error. parseField is used in the evaled code below.
+        let result: (buffer: Buffer, offset: number) => Record;
+        let source =`((buffer, offset) => ({
+            ${this.columns.filter((_, i) => columnWhitelist[i]).map(col => `
+                ${col.name}: parseField(buffer, ${col.type}, offset + ${col.offset}, ${col.length}),
+            `).join('')}
+        }))`;
+        result = eval(source);
+        return result;
     }
 }
 
