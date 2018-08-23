@@ -49,7 +49,7 @@ export class AdtFile {
      * NB2: deleted records are skipped, so the number of records returned may be less than limit / recordCount.
      * @param options.offset number of records to skip before reading records. Default: 0
      * @param options.limit number of records to read before returning. Default: <record count - offset>
-     * @param options.columnNames subset of column names to return. Default: <all column names>
+     * @param options.columnNames subset of column names to return (case-insensitive). Default: <all column names>
      */
      async fetchRecords(options?: {offset?: number, limit?: number, columnNames?: string[]}) {
         options = options || {};
@@ -63,12 +63,13 @@ export class AdtFile {
         if (finishedIndex < startingIndex) finishedIndex = startingIndex;
         if (finishedIndex > header.recordCount) finishedIndex = header.recordCount;
 
-        // Calculate column name whitelist
+        // Calculate column name whitelist. Compare options.columnNames case-insensitively.
         let columns = this.columns;
         if (options.columnNames) {
-            let invalidColumnNames = options.columnNames.filter(n => !columns.some(c => c.name === n));
-            if (invalidColumnNames.length > 0) throw new Error(`Invalid column name(s): ${invalidColumnNames}`);
-            columns = options.columnNames.map(name => columns.find(col => col.name === name)!);
+            let whitelist = options.columnNames;
+            let invalidNames = whitelist.filter(wn => !columns.some(c => c.name.toLowerCase() === wn.toLowerCase()));
+            if (invalidNames.length > 0) throw new Error(`Invalid column name(s): ${invalidNames}`);
+            columns = whitelist.map(wn => columns.find(col => col.name.toLowerCase() === wn.toLowerCase())!);
         }
 
         // Read all fetched records into a single buffer.
