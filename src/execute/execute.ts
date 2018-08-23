@@ -1,5 +1,4 @@
 import {parseSQL, Restriction, Join, EqValue, NeValue, GtValue, GeValue, LtValue, LeValue} from '../parse';
-import {fetchRecords, FetchOptions} from './fetch-records';
 import * as path from 'path';
 import {AdtFile} from './adt-file';
 
@@ -51,10 +50,7 @@ export async function execute(databasePath: string, sql: string): Promise<any[]>
     });
 
     // TODO: fetch all rowsets with table-level filtering...
-    let rowsets = await Promise.all(tableNames.map((tableName, i) => {
-        let options: FetchOptions = {filter: filters[i]};
-        return fetchRecords(databasePath, tableName, options);
-    }));
+    let rowsets = await Promise.all(tableNames.map((tableName, i) => fetchRecords(databasePath, tableName, filters[i])));
 
     // TODO: consume each join until there is a single rowset left
     // TODO: Also if any rowset is empty then the final result is also empty
@@ -157,5 +153,21 @@ function jsBinaryOperator(r: Restriction) {
         default:
             // If we get here, the code hasn't accounted for all possible restriction types and needs updating
             throw new Error(`Internal error`);
+    }
+}
+
+
+
+
+async function fetchRecords(databasePath: string, tableName: string, filter: (row: any) => boolean) {
+    let tablePath = path.join(databasePath, tableName + '.adt');
+    let adt = await AdtFile.open(tablePath, 'ISO-8859-1');
+    try {
+        let records = await adt.fetchRecords();
+        let rows = records.map(rec => ({[tableName]: rec})).filter(filter);
+        return rows;
+    }
+    finally {
+        adt.close();
     }
 }

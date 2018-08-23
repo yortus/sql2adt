@@ -17,10 +17,6 @@
  *     CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  *     IN THE SOFTWARE.
  */
-
-
-
-
 import * as fs from 'fs';
 import * as iconv from 'iconv-lite';
 import {promisify} from 'util';
@@ -28,24 +24,222 @@ import {promisify} from 'util';
 
 
 
+// TODO: jsdoc...
+export class AdtFile {
 
-// TODO: added...
-const fsOpen = promisify(fs.open);
-const fsRead = promisify(fs.read);
-const fsClose = promisify(fs.close);
+    // TODO: jsdoc...
+    static async open(path: string, encoding: string) {
+        encoding = encoding || 'ISO-8859-1';
+        let fd = await fsOpen(path, 'r');
+        let header = await parseHeader(fd);
+        let columns = await parseColumns(fd, encoding, header);
+        return new AdtFile(encoding, fd, header, columns);
+    }
+
+    // TODO: jsdoc...
+    // - this number includes deleted records, so may be greater than the number of records returned by fetchRecords.
+    recordCount: number;
+
+    // TODO: jsdoc...
+    // - index file not consulted, so records are returned in natural (i.e., file) order.
+    // - deleted records are skipped, so result length may be less than limit / recordCount.
+    async fetchRecords(options?: {offset?: number, limit?: number, columnNames?: string[]}) {
+        options = options || {};
+        let header = this.header;
+
+        // Calculate iteration limits. Ensure they are clamped within a valid range.
+        let startingIndex = typeof options.offset === 'number' ? options.offset : 0;
+        if (startingIndex < 0) startingIndex = 0;
+        if (startingIndex > header.recordCount) startingIndex = header.recordCount;
+        let finishedIndex =  typeof options.limit === 'number' ? startingIndex + options.limit : header.recordCount;
+        if (finishedIndex < startingIndex) finishedIndex = startingIndex;
+        if (finishedIndex > header.recordCount) finishedIndex = header.recordCount;
+
+        // Calculate column name whitelist
+        let columnWhitelist = this.columns.map(() => true);
+        if (options.columnNames) {
+            for (let i = 0; i < this.columns.length; ++i) {
+                if (!options.columnNames.includes(this.columns[i].name)) {
+                    columnWhitelist[i] = false;
+                }
+            }
+        }
+
+        // Read all fetched records into a single buffer.
+        // TODO: use a chunked approach if file is *very* large? Probably not, largest we've seen are ~50MB.
+        let buffer = Buffer.alloc((finishedIndex - startingIndex) * header.recordLength);
+        await fsRead(this.fd, buffer, 0, buffer.length, header.dataOffset + startingIndex * header.recordLength);
+
+        // Parse each record out of the buffer into an object
+        let records = [] as Record[];
+        for (let recordOffset = 0; recordOffset < buffer.length; recordOffset += header.recordLength) {
+            // Skip records marked as deleted. When this happens, less than `limit` records will be returned.
+            if (buffer.readInt8(recordOffset) === 0x05)  continue; // first byte of 0x05 indicates record is deleted
+            records.push(this.parseRecord(buffer, recordOffset, columnWhitelist));
+        }
+        return records;
+    }
+
+    // TODO: jsdoc...
+    async fetchRecord(recordNumber: number) {
+        if (recordNumber > this.header.recordCount) {
+            throw new Error(`record number ${recordNumber} is greater than the record count (${this.header.recordCount})`);
+        }
+
+        let start  = this.header.dataOffset + this.header.recordLength * recordNumber;
+        let end    = start + this.header.recordLength;
+        let length = end - start;
+        let tempBuffer = new Buffer(length);
+
+        let {buffer} = await fsRead(this.fd, tempBuffer, 0, length, start);
+        let record = this.parseRecord(buffer, 0, this.columns.map(() => true));
+        return record;
+    }
+
+    // TODO: jsdoc...
+    async close() {
+        if (this.fd !== -1) {
+            let closed = fsClose(this.fd);
+            this.fd = -1;
+            await closed;
+        }
+    };
+
+    // TODO: jsdoc...
+    private constructor(
+        private encoding: string,
+        private fd: number,
+        private header: Header,
+        private columns: Column[]
+    ) {
+        this.recordCount = header.recordCount;
+    }
+
+    // TODO: jsdoc...
+    private parseRecord(buffer: Buffer, offset: number, columnWhitelist: boolean[]) {
+        let record = {} as Record;
+        for (let i = 0; i < this.header.columnCount; ++i) {
+            if (!columnWhitelist[i]) continue;
+            let column = this.columns[i];
+            record[column.name] = parseField(buffer, this.encoding, column.type, offset + column.offset, column.length);
+        }
+        return record;
+    }
+}
 
 
 
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
-const JULIAN_1970 = 2440588;
+/** Retrieves the record count, column count, record length, and data offset for an ADT file. */
+async function parseHeader(fd: number): Promise<Header> {
+    let {buffer} = await fsRead(fd, new Buffer(HEADER_LENGTH), 0, HEADER_LENGTH, 0);
+    return {
+        recordCount: buffer.readUInt32LE(24),
+        dataOffset: buffer.readUInt32LE(32),
+        recordLength: buffer.readUInt32LE(36),
+        columnCount: (buffer.readUInt32LE(32) - HEADER_LENGTH) / COLUMN_LENGTH,
+    };
+}
 
 
 
 
-// TODO: added...
-const HEADER_LENGTH = 400;
-const COLUMN_LENGTH = 200;
+/** Retrieves information about all columns in an ADT file. */
+async function parseColumns(fd: number, encoding: string, header: Header) {
+
+    // Read all column information into a buffer. Column info starts right after the header.
+    let buffer = new Buffer(header.columnCount * COLUMN_LENGTH);
+    await fsRead(fd, buffer, 0, buffer.length, HEADER_LENGTH);
+
+    // The byte range for each individual record in an ADT file starts with 5 bytes of data *before* the data
+    // for the first column. The data for each subsequent column follows contiguously from the previous column.
+    let offset = 5;
+
+    // Column info: 200 bytes per column
+    // 0x00-0x7f: column name (128 bytes)
+    // 0x81-0x82: column type (2 bytes)
+    // 0x87-0x88: column length (2 bytes)
+    let columns = Array(header.columnCount).fill(null).map(() => ({} as Column));
+    for (let column of columns) {
+        column.name = iconv.decode(buffer.slice(0, 0x80), encoding).replace(/\0/g, '').trim();
+        column.type = buffer.readUInt16LE(0x81);
+        column.length = buffer.readUInt16LE(0x87);
+        column.offset = offset;
+
+        // Advance the buffer and offset for the next column.
+        buffer = buffer.slice(COLUMN_LENGTH);
+        offset += column.length;
+    }
+    return columns;
+}
+
+
+
+
+/**
+ * Retrieves one field of one record from the database.
+ * ref: http://devzone.advantagedatabase.com/dz/webhelp/advantage8.1/server1/adt_field_types_and_specifications.htm
+ */
+function parseField(buffer: Buffer, encoding: string, type: number, start: number, length: number) {
+    switch(type) {
+        case ColumnType.CHARACTER:
+        case ColumnType.CICHARACTER:
+            return iconv.decode(buffer.slice(start, start + length), encoding).replace(/\0/g, '').trim();
+
+        case ColumnType.NCHAR:
+            return buffer.toString('ucs2', start, start + length).replace(/\0/g, '').trim();
+
+        case ColumnType.DOUBLE:
+            return buffer.readDoubleLE(start);
+
+        case ColumnType.AUTOINCREMENT:
+            return buffer.readUInt32LE(start);
+
+        case ColumnType.INTEGER:
+            let ival = buffer.readInt32LE(start);
+            return ival === -2147483648 ? null : ival;
+
+        case ColumnType.SHORT:
+            return buffer.readInt16LE(start);
+
+        case ColumnType.LOGICAL:
+            let b = iconv.decode(buffer.slice(start, start + length), encoding);
+            return (b === 'T' || b === 't' || b === '1' || b === 'Y' || b === 'y' || b === ' ')
+
+        case ColumnType.DATE:
+            let julian = buffer.readInt32LE(start);
+            return julian === 0 ? null : new Date((julian - JULIAN_1970) * MS_PER_DAY);
+
+        case ColumnType.TIMESTAMP:
+            let julian2 = buffer.readInt32LE(start);
+            let ms = buffer.readInt32LE(start + 4);
+            return julian2 === 0 && ms === -1 ? null : new Date((julian2 - JULIAN_1970) * MS_PER_DAY + ms);
+
+        // not implemented
+        case ColumnType.TIME:
+            return buffer;
+
+        default:
+            return null;
+    }
+}
+
+
+
+
+// Types used for parsing ADT files.
+interface Header {
+    recordCount: number;
+    dataOffset: number;
+    recordLength: number;
+    columnCount: number;
+}
+interface Column {
+    name: string;
+    type: ColumnType;
+    offset: number;
+    length: number;
+}
 const enum ColumnType {
     LOGICAL       = 1,
     CHARACTER     = 4,
@@ -59,207 +253,23 @@ const enum ColumnType {
     TIME          = 13,
     TIMESTAMP     = 14,
 }
-
-
-
-
-// TODO: added...
-interface Header {
-    recordCount: number;
-    dataOffset: number;
-    recordLength: number;
-    columnCount: number;
-}
-interface Column {
-    name: string;
-    type: ColumnType;
-    offset: number;
-    length: number;
-}
-export interface Record {
+interface Record {
     [columnName: string]: unknown;
 }
 
 
 
 
-export class AdtFile {
+// Promisified fs functions used to work with ADT files.
+const fsOpen = promisify(fs.open);
+const fsRead = promisify(fs.read);
+const fsClose = promisify(fs.close);
 
-    // TODO: jsdoc...
-    static async open(path: string, encoding: string) {
-        encoding = encoding || 'ISO-8859-1';
-        let fd = await fsOpen(path, 'r');
-        let header = await this.parseHeader(fd);
-        let columns = await this.parseColumns(fd, encoding, header);
-        return new AdtFile(encoding, fd, header, columns);
-    }
 
-    // TODO: jsdoc...
-    async fetchRecords(options?: {offset?: number, limit?: number, columnNames?: string[]}) {
-        options = options || {};
 
-        // Calculate iteration limits
-        let startingIndex = typeof options.offset === 'number' ? options.offset : 0;
-        if (startingIndex < 0) startingIndex = 0;
-        if (startingIndex > this.header.recordCount) startingIndex = this.header.recordCount;
-        let finishedIndex =  typeof options.limit === 'number' ? startingIndex + options.limit : this.header.recordCount;
-        if (finishedIndex < startingIndex) finishedIndex = startingIndex;
-        if (finishedIndex > this.header.recordCount) finishedIndex = this.header.recordCount;
 
-        // Calculate column name whitelist
-        let columnWhitelist = this.columns.map(() => true);
-        if (options.columnNames) {
-            for (let i = 0; i < this.columns.length; ++i) {
-                if (!options.columnNames.includes(this.columns[i].name)) {
-                    columnWhitelist[i] = false;
-                }
-            }
-        }
-
-        let records = [] as Record[];
-        let iteratedCount = 0;
-        while (startingIndex + iteratedCount < finishedIndex) {
-            let start  = this.header.dataOffset + this.header.recordLength * (startingIndex + iteratedCount);
-            let end    = start + this.header.recordLength;
-            let length = end - start;
-            let tempBuffer = new Buffer(length);
-
-            let {buffer} = await fsRead(this.fd, tempBuffer, 0, length, start);
-
-            // TODO: desired semantics for deleted records????
-            // read next record, unless it is marked as deleted (first byte = 0x05)
-            if (buffer.readInt8(0) !== 5) {
-                records.push(this.parseRecord(buffer, columnWhitelist));
-            }
-
-            ++iteratedCount;
-        }
-        return records;
-    }
-
-    async fetchRecord(recordNumber: number) {
-        if (recordNumber > this.header.recordCount) {
-            throw new Error(`record number ${recordNumber} is greater than the record count (${this.header.recordCount})`);
-        }
-
-        let start  = this.header.dataOffset + this.header.recordLength * recordNumber;
-        let end    = start + this.header.recordLength;
-        let length = end - start;
-        let tempBuffer = new Buffer(length);
-
-        let {buffer} = await fsRead(this.fd, tempBuffer, 0, length, start);
-        let record = this.parseRecord(buffer, this.columns.map(() => true));
-        return record;
-    }
-
-    async close() {
-        if (this.fd !== -1) {
-            let closed = fsClose(this.fd);
-            this.fd = -1;
-            await closed;
-        }
-    };
-
-    private constructor(
-        private encoding: string,
-        private fd: number,
-        private header: Header,
-        private columns: Column[]
-    ) {}
-
-    // Determine record count, column count, record length, and data offset
-    private static async parseHeader(fd: number) {
-        let {buffer} = await fsRead(fd, new Buffer(HEADER_LENGTH), 0, HEADER_LENGTH, 0);
-        let header = {} as Header;
-
-        header.recordCount  = buffer.readUInt32LE(24);
-        header.dataOffset   = buffer.readUInt32LE(32);
-        header.recordLength = buffer.readUInt32LE(36);
-        header.columnCount  = (header.dataOffset - 400) / 200;
-        return header;
-    }
-
-    // Retrieves column information from the database
-    private static async parseColumns(fd: number, encoding: string, header: Header) {
-        // column information is located after the header
-        // 200 bytes of information for each column
-        let columnsLength = COLUMN_LENGTH * header.columnCount;
-        let tempBuffer = new Buffer(HEADER_LENGTH + columnsLength);
-        let {buffer} = await fsRead(fd, tempBuffer, 0, columnsLength, HEADER_LENGTH);
-
-        let columns = [] as Column[];
-
-        // NB: skip the first 5 bytes, don't know what they are for and they don't contain the data.
-        let offset = 5;
-
-        for (let i = 0; i < header.columnCount; ++i) {
-            let column = buffer.slice(COLUMN_LENGTH * i);
-
-            // column names are the first 128 bytes and column info takes up the last 72 bytes.
-            // byte 130 contains a 16-bit column type
-            // byte 136 contains a 16-bit length field
-            let name = iconv.decode(column.slice(0, 128), encoding).replace(/\0/g, '').trim();
-            let type = column.readUInt16LE(129);
-            let length = column.readUInt16LE(135);
-            columns.push({name: name, type: type, offset, length: length});
-            offset += length;
-        }
-        return columns;
-    }
-
-    private parseRecord(buffer: Buffer, columnWhitelist: boolean[]) {
-        let record = {} as Record;
-        for (let i = 0; i < this.header.columnCount; ++i) {
-            if (!columnWhitelist[i]) continue;
-            let column = this.columns[i];
-            record[column.name] = this.parseField(buffer, column.type, column.offset, column.length);
-        }
-        return record;
-    }
-
-    // Reference:
-    // http://devzone.advantagedatabase.com/dz/webhelp/advantage8.1/server1/adt_field_types_and_specifications.htm
-    private parseField(buffer: Buffer, type: number, start: number, length: number) {
-        switch(type) {
-            case ColumnType.CHARACTER:
-            case ColumnType.CICHARACTER:
-                return iconv.decode(buffer.slice(start, start + length), this.encoding).replace(/\0/g, '').trim();
-
-            case ColumnType.NCHAR:
-                return buffer.toString('ucs2', start, start + length).replace(/\0/g, '').trim();
-
-            case ColumnType.DOUBLE:
-                return buffer.readDoubleLE(start);
-
-            case ColumnType.AUTOINCREMENT:
-                return buffer.readUInt32LE(start);
-
-            case ColumnType.INTEGER:
-                let ival = buffer.readInt32LE(start);
-                return ival === -2147483648 ? null : ival;
-
-            case ColumnType.SHORT:
-                return buffer.readInt16LE(start);
-
-            case ColumnType.LOGICAL:
-                let b = iconv.decode(buffer.slice(start, start + length), this.encoding);
-                return (b === 'T' || b === 't' || b === '1' || b === 'Y' || b === 'y' || b === ' ')
-
-            case ColumnType.DATE:
-                let julian = buffer.readInt32LE(start);
-                return julian === 0 ? null : new Date((julian - JULIAN_1970) * MS_PER_DAY);
-
-            case ColumnType.TIMESTAMP:
-                let julian2 = buffer.readInt32LE(start);
-                let ms = buffer.readInt32LE(start + 4);
-                return julian2 === 0 && ms === -1 ? null : new Date((julian2 - JULIAN_1970) * MS_PER_DAY + ms);
-
-            // not implemented
-            case ColumnType.TIME:
-                return buffer;
-
-            default:
-                return null;
-        }
-    }
-}
+// Constants used in ADT file parsing and conversions.
+const HEADER_LENGTH = 400;
+const COLUMN_LENGTH = 200;
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const JULIAN_1970 = 2440588;
