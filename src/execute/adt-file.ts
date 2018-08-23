@@ -81,23 +81,6 @@ export class AdtFile {
     }
 
     // TODO: jsdoc...
-    async fetchRecord(recordNumber: number) {
-        if (recordNumber > this.header.recordCount) {
-            throw new Error(`record number ${recordNumber} is greater than the record count (${this.header.recordCount})`);
-        }
-
-        let start  = this.header.dataOffset + this.header.recordLength * recordNumber;
-        let end    = start + this.header.recordLength;
-        let length = end - start;
-        let tempBuffer = new Buffer(length);
-
-        let {buffer} = await fsRead(this.fd, tempBuffer, 0, length, start);
-        let parseRecord = this.makeRecordParser(this.columns.map(() => true));
-        let record = parseRecord(buffer, 0);
-        return record;
-    }
-
-    // TODO: jsdoc...
     async close() {
         if (this.fd !== -1) {
             let closed = fsClose(this.fd);
