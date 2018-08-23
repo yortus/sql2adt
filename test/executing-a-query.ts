@@ -55,6 +55,15 @@ describe('Executing a query', () => {
             rows => expect(rows[0].CustNo).to.equal(4684),
             rows => expect(rows[4].Contact).to.equal('Isabelle Neece')
         ],
+        `SELECT v.VendorNo AS VendorNo, v.City AS City, v.Preferred AS Preferred FROM vendors`, [
+            rows => expect(rows.length).to.equal(23),
+            rows => expect(rows[0].VendorNo).to.equal(2014),
+            rows => expect(rows[0].Preferred).to.equal(true),
+            rows => expect(rows[10].VendorNo).to.equal(4655),
+            rows => expect(rows[10].Preferred).to.equal(false),
+            rows => expect(rows[22].VendorNo).to.equal(7685),
+            rows => expect(rows[22].Preferred).to.equal(true),
+        ],
     ];
 
     for (let i = 0; i < tests.length; i += 2) {

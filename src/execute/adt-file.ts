@@ -118,7 +118,7 @@ export class AdtFile {
     // TODO: jsdoc...
     private parseRecord(buffer: Buffer, offset: number, columnWhitelist: boolean[]) {
         let record = {} as Record;
-        for (let i = 0; i < this.header.columnCount; ++i) {
+        for (let i = 0; i < this.columns.length; ++i) {
             if (!columnWhitelist[i]) continue;
             let column = this.columns[i];
             record[column.name] = parseField(buffer, this.encoding, column.type, offset + column.offset, column.length);
@@ -187,7 +187,7 @@ function parseField(buffer: Buffer, encoding: string, type: number, start: numbe
             return iconv.decode(buffer.slice(start, start + length), encoding).replace(/\0/g, '').trim();
 
         case ColumnType.NCHAR:
-            return buffer.toString('ucs2', start, start + length).replace(/\0/g, '').trim();
+            return iconv.decode(buffer.slice(start, start + length), 'ucs2').replace(/\0/g, '').trim();
 
         case ColumnType.DOUBLE:
             return buffer.readDoubleLE(start);
@@ -204,7 +204,7 @@ function parseField(buffer: Buffer, encoding: string, type: number, start: numbe
 
         case ColumnType.LOGICAL:
             let b = iconv.decode(buffer.slice(start, start + length), encoding);
-            return (b === 'T' || b === 't' || b === '1' || b === 'Y' || b === 'y' || b === ' ')
+            return (b === 'T' || b === 't' || b === '1' || b === 'Y' || b === 'y');
 
         case ColumnType.DATE:
             let julian = buffer.readInt32LE(start);
