@@ -23,10 +23,10 @@ import {promisify} from 'util';
 
 
 
-// TODO: jsdoc...
+/** Represents an ADT file. */
 export class AdtFile {
 
-    // TODO: jsdoc...
+    /** Opens the ADT file at the specified path. */
     static async open(path: string) {
         let fd = await fsOpen(path, 'r');
         let header = await parseHeader(fd);
@@ -34,14 +34,24 @@ export class AdtFile {
         return new AdtFile(fd, header, columns);
     }
 
-    // TODO: jsdoc...
-    // - this number includes deleted records, so may be greater than the number of records returned by fetchRecords.
+    /**
+     * The number of records in the ADT file. This number is inclusive of records marked as
+     * deleted, so it may be greater than the total number of records returned by fetchRecords.
+     */
     recordCount: number;
 
-    // TODO: jsdoc...
-    // - index file not consulted, so records are returned in natural (i.e., file) order.
-    // - deleted records are skipped, so result length may be less than limit / recordCount.
-    async fetchRecords(options?: {offset?: number, limit?: number, columnNames?: string[]}) {
+    /** The names of all the columns in the ADT file. */
+    columnNames: string[];
+
+    /**
+     * Reads and returns records from the ADT file.
+     * NB1: no index file is consulted, so records are returned in natural (i.e., file) order.
+     * NB2: deleted records are skipped, so the number of records returned may be less than limit / recordCount.
+     * @param options.offset number of records to skip before reading records. Default: 0
+     * @param options.limit number of records to read before returning. Default: <record count - offset>
+     * @param options.columnNames subset of column names to return. Default: <all column names>
+     */
+     async fetchRecords(options?: {offset?: number, limit?: number, columnNames?: string[]}) {
         options = options || {};
         let header = this.header;
 
@@ -54,13 +64,11 @@ export class AdtFile {
         if (finishedIndex > header.recordCount) finishedIndex = header.recordCount;
 
         // Calculate column name whitelist
-        let columnWhitelist = this.columns.map(() => true);
+        let columns = this.columns;
         if (options.columnNames) {
-            for (let i = 0; i < this.columns.length; ++i) {
-                if (!options.columnNames.includes(this.columns[i].name)) {
-                    columnWhitelist[i] = false;
-                }
-            }
+            let invalidColumnNames = options.columnNames.filter(n => !columns.some(c => c.name === n));
+            if (invalidColumnNames.length > 0) throw new Error(`Invalid column name(s): ${invalidColumnNames}`);
+            columns = options.columnNames.map(name => columns.find(col => col.name === name)!);
         }
 
         // Read all fetched records into a single buffer.
@@ -69,7 +77,7 @@ export class AdtFile {
         await fsRead(this.fd, buffer, 0, buffer.length, header.dataOffset + startingIndex * header.recordLength);
 
         // Parse each record out of the buffer into an object
-        let parseRecord = this.makeRecordParser(columnWhitelist);
+        let parseRecord = makeRecordParser(columns);
         let records = [] as Record[];
         for (let recordOffset = 0; recordOffset < buffer.length; recordOffset += header.recordLength) {
             // Skip records marked as deleted. When this happens, less than `limit` records will be returned.
@@ -80,7 +88,7 @@ export class AdtFile {
         return records;
     }
 
-    // TODO: jsdoc...
+    /** Closes the ADT file. Call this as part of cleanup to prevent leaking file descriptors. */
     async close() {
         if (this.fd !== -1) {
             let closed = fsClose(this.fd);
@@ -89,22 +97,10 @@ export class AdtFile {
         }
     };
 
-    // TODO: jsdoc...
+    /** Creates an AdtFile instance. Not to be called directly (hence private). Use AdtFile.open(). */
     private constructor(private fd: number, private header: Header, private columns: Column[]) {
         this.recordCount = header.recordCount;
-    }
-
-    // TODO: jsdoc...
-    private makeRecordParser(columnWhitelist: boolean[]) {
-        [parseField]; // Prevent TS 'unused declaration' error. parseField is used in the evaled code below.
-        let result: (buffer: Buffer, offset: number) => Record;
-        let source =`((buffer, offset) => ({
-            ${this.columns.filter((_, i) => columnWhitelist[i]).map(col => `
-                ${col.name}: parseField(buffer, ${col.type}, offset + ${col.offset}, ${col.length}),
-            `).join('')}
-        }))`;
-        result = eval(source);
-        return result;
+        this.columnNames = columns.map(c => c.name);
     }
 }
 
@@ -152,6 +148,20 @@ async function parseColumns(fd: number, header: Header) {
         offset += column.length;
     }
     return columns;
+}
+
+
+
+
+/** Creates a fast record parsing function than is tailored to the given columns. */
+function makeRecordParser(columns: Column[]) {
+    [columns, parseField]; // Reference decls used only in evaled code, to prevent TS 'unused declaration' error.
+    let source =`((buffer, offset) => ({
+        ${columns.map(col => `
+            ${col.name}: parseField(buffer, ${col.type}, offset + ${col.offset}, ${col.length}),
+        `).join('')}
+    }))`;
+    return eval(source) as (buffer: Buffer, offset: number) => Record;
 }
 
 
