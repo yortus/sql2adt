@@ -19,7 +19,7 @@ export async function execute(databasePath: string, sql: string): Promise<any[]>
     if (tableNames.length === 1 && predicates.length === 0) {
         // TODO: ...
         let tablePath = path.join(databasePath, tableNames[0] + '.adt');
-        let adt = await AdtFile.open(tablePath, 'ISO-8859-1');
+        let adt = await AdtFile.open(tablePath);
         try {
             let columnNames = projs.map(p => p.column.split('.')[1]);
             let records = await adt.fetchRecords({limit: ast.limit, offset: ast.offset, columnNames});
@@ -84,11 +84,8 @@ export async function execute(databasePath: string, sql: string): Promise<any[]>
     usedRestrictions += joins.length;
 
     // TODO: perform the projections
-    let project: Function = eval(`(tuple => ({${projs.map(p => `${p.alias}: tuple.${p.column}`)}}))`);
-    result = result.map(tuple => {
-        let result = project(tuple);
-        return result;
-    });
+    let project: (row: any) => any = eval(`(tuple => ({${projs.map(p => `${p.alias}: tuple.${p.column}`)}}))`);
+    result = result.map(project);
 
     // TODO: sanity check - were all restrictions consumed to produce the final result?
     if (usedRestrictions !== ast.restrictions.length) {
@@ -161,7 +158,7 @@ function jsBinaryOperator(r: Restriction) {
 
 async function fetchRecords(databasePath: string, tableName: string, filter: (row: any) => boolean) {
     let tablePath = path.join(databasePath, tableName + '.adt');
-    let adt = await AdtFile.open(tablePath, 'ISO-8859-1');
+    let adt = await AdtFile.open(tablePath);
     try {
         let records = await adt.fetchRecords();
         let rows = records.map(rec => ({[tableName]: rec})).filter(filter);

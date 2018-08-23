@@ -18,7 +18,6 @@
  *     IN THE SOFTWARE.
  */
 import * as fs from 'fs';
-import * as iconv from 'iconv-lite';
 import {promisify} from 'util';
 
 
@@ -28,12 +27,11 @@ import {promisify} from 'util';
 export class AdtFile {
 
     // TODO: jsdoc...
-    static async open(path: string, encoding: string) {
-        encoding = encoding || 'ISO-8859-1';
+    static async open(path: string) {
         let fd = await fsOpen(path, 'r');
         let header = await parseHeader(fd);
-        let columns = await parseColumns(fd, encoding, header);
-        return new AdtFile(encoding, fd, header, columns);
+        let columns = await parseColumns(fd, header);
+        return new AdtFile(fd, header, columns);
     }
 
     // TODO: jsdoc...
@@ -106,12 +104,7 @@ export class AdtFile {
     };
 
     // TODO: jsdoc...
-    private constructor(
-        private encoding: string,
-        private fd: number,
-        private header: Header,
-        private columns: Column[]
-    ) {
+    private constructor(private fd: number, private header: Header, private columns: Column[]) {
         this.recordCount = header.recordCount;
     }
 
@@ -121,7 +114,7 @@ export class AdtFile {
         for (let i = 0; i < this.columns.length; ++i) {
             if (!columnWhitelist[i]) continue;
             let column = this.columns[i];
-            record[column.name] = parseField(buffer, this.encoding, column.type, offset + column.offset, column.length);
+            record[column.name] = parseField(buffer, column.type, offset + column.offset, column.length);
         }
         return record;
     }
@@ -145,7 +138,7 @@ async function parseHeader(fd: number): Promise<Header> {
 
 
 /** Retrieves information about all columns in an ADT file. */
-async function parseColumns(fd: number, encoding: string, header: Header) {
+async function parseColumns(fd: number, header: Header) {
 
     // Read all column information into a buffer. Column info starts right after the header.
     let buffer = new Buffer(header.columnCount * COLUMN_LENGTH);
@@ -161,7 +154,7 @@ async function parseColumns(fd: number, encoding: string, header: Header) {
     // 0x87-0x88: column length (2 bytes)
     let columns = Array(header.columnCount).fill(null).map(() => ({} as Column));
     for (let column of columns) {
-        column.name = iconv.decode(buffer.slice(0, 0x80), encoding).replace(/\0/g, '').trim();
+        column.name = buffer.toString('latin1',  0, 0x80).replace(/\0/g, '').trim();
         column.type = buffer.readUInt16LE(0x81);
         column.length = buffer.readUInt16LE(0x87);
         column.offset = offset;
@@ -180,14 +173,14 @@ async function parseColumns(fd: number, encoding: string, header: Header) {
  * Retrieves one field of one record from the database.
  * ref: http://devzone.advantagedatabase.com/dz/webhelp/advantage8.1/server1/adt_field_types_and_specifications.htm
  */
-function parseField(buffer: Buffer, encoding: string, type: number, start: number, length: number) {
-    switch(type) {
+function parseField(buffer: Buffer, type: number, start: number, length: number) {
+    switch (type) {
         case ColumnType.CHARACTER:
         case ColumnType.CICHARACTER:
-            return iconv.decode(buffer.slice(start, start + length), encoding).replace(/\0/g, '').trim();
+            return buffer.toString('latin1', start, start + length).replace(/\0/g, '').trim();
 
         case ColumnType.NCHAR:
-            return iconv.decode(buffer.slice(start, start + length), 'ucs2').replace(/\0/g, '').trim();
+            return buffer.toString('ucs2', start, start + length).replace(/\0/g, '').trim();
 
         case ColumnType.DOUBLE:
             return buffer.readDoubleLE(start);
@@ -203,7 +196,7 @@ function parseField(buffer: Buffer, encoding: string, type: number, start: numbe
             return buffer.readInt16LE(start);
 
         case ColumnType.LOGICAL:
-            let b = iconv.decode(buffer.slice(start, start + length), encoding);
+            let b = buffer.toString('latin1', start, start + length);
             return (b === 'T' || b === 't' || b === '1' || b === 'Y' || b === 'y');
 
         case ColumnType.DATE:
@@ -215,12 +208,10 @@ function parseField(buffer: Buffer, encoding: string, type: number, start: numbe
             let ms = buffer.readInt32LE(start + 4);
             return julian2 === 0 && ms === -1 ? null : new Date((julian2 - JULIAN_1970) * MS_PER_DAY + ms);
 
-        // not implemented
+        // not implemented / not supported
         case ColumnType.TIME:
-            return buffer;
-
         default:
-            return null;
+            return NOT_SUPPORTED;
     }
 }
 
@@ -273,3 +264,4 @@ const HEADER_LENGTH = 400;
 const COLUMN_LENGTH = 200;
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const JULIAN_1970 = 2440588;
+const NOT_SUPPORTED = Symbol('Unsupported datatype');
