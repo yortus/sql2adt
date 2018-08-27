@@ -36,7 +36,7 @@ export async function execute(databasePath: string, sql: string): Promise<any[]>
             return records;
         }
         finally {
-            adt.close();
+            await adt.close();
         }
     }
 
